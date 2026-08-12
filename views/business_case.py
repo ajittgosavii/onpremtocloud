@@ -162,6 +162,7 @@ with tab_cash:
     fig.update_layout(height=380, barmode="group", title="Annual cost by option",
                       xaxis_title="Year", yaxis_title=f"{cur} per year",
                       xaxis=dict(dtick=1))
+    ui.legend_top(fig)
     st.plotly_chart(fig, width="stretch")
 
     c1, c2 = st.columns(2)
@@ -173,6 +174,7 @@ with tab_cash:
                                  mode="lines+markers", line=dict(width=3, color=ui.PALETTE[0])))
         fig.update_layout(height=340, title="Cumulative cost",
                           xaxis_title="Year", yaxis_title=cur, xaxis=dict(dtick=1))
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
     with c2:
         fig = go.Figure(go.Bar(

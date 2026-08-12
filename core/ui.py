@@ -468,6 +468,43 @@ def pricing_badge(source: str) -> str:
 # --------------------------------------------------------------------------
 # Charts
 # --------------------------------------------------------------------------
+def legend_top(fig, title: str = "", height: int | None = None):
+    """Lay a horizontal legend beneath the chart title instead of on top of it.
+
+    The template puts the title and a horizontal legend in the same place, which
+    is fine for the legend-less charts ``bar`` and ``donut`` build but collides on
+    anything with a colour dimension. Plotly Express compounds it by writing the
+    colour column's own name into the legend, so a chart heading ends up sharing a
+    line with the word "tier" or "os_family".
+
+    Call this on any figure that shows a legend. ``title`` is normally left empty:
+    the swatch labels in this application say what they are.
+    """
+    fig.update_layout(
+        title=dict(y=0.985, yanchor="top", yref="container"),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=0,
+                    title_text=title, font=dict(size=12)),
+        margin=dict(t=86),
+    )
+    if height is not None:
+        fig.update_layout(height=height)
+    return fig
+
+
+def log_ticks(fig, axis: str = "x", values=(1, 2, 4, 8, 16, 32, 64, 128, 256)):
+    """Label a log axis at the given values only.
+
+    Plotly's default log ticks interleave minor ticks without their exponent, so a
+    run of decades reads "2, 100, 5, 2, 10" -- actively misleading rather than
+    merely dense. The quantities plotted on log axes here (vCPU, RAM GiB) are
+    powers of two, so naming the ticks is both clearer and shorter.
+    """
+    update = dict(tickmode="array", tickvals=list(values),
+                  ticktext=[format(v, ",g") for v in values])
+    (fig.update_xaxes if axis == "x" else fig.update_yaxes)(**update)
+    return fig
+
+
 def bar(df, x: str, y: str, title: str = "", colour_map: dict | None = None,
         orientation: str = "v", height: int = 340, text_fmt: str | None = None):
     colours = [colour_map.get(v, PALETTE[0]) for v in df[x]] if colour_map else PALETTE[0]

@@ -144,6 +144,7 @@ with tab_cost:
     fig.update_layout(barmode="stack", height=560,
                       title=f"Tooling cost for {n_vms:,} VMs",
                       xaxis_title=cur, yaxis=dict(autorange="reversed"))
+    ui.legend_top(fig)
     st.plotly_chart(fig, width="stretch")
 
     disp = cost.copy()

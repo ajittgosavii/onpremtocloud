@@ -154,6 +154,7 @@ with tab_gantt:
                      color_discrete_sequence=ui.PALETTE,
                      title="What sets each wave's duration")
         fig.update_layout(height=330, xaxis_title="", yaxis_title="Days")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
 
 # --------------------------------------------------------------------------
@@ -189,6 +190,7 @@ with tab_waves:
                                          "Engineering capacity": ui.PALETTE[0]},
                      title="Data volume per wave")
         fig.update_layout(height=330, xaxis_title="", yaxis_title="TiB")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
     with c2:
         fig = px.bar(sched, x="wave_name", y="expected_rollbacks",

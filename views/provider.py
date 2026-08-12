@@ -176,6 +176,7 @@ with tab_lic:
     fig.update_layout(barmode="stack", height=390,
                       title=f"Annual licensing cost ({cur})",
                       xaxis_title="", yaxis_title=f"{cur} per year")
+    ui.legend_top(fig)
     st.plotly_chart(fig, width="stretch")
 
     disp = lic.copy()

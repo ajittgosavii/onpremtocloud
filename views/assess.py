@@ -131,6 +131,7 @@ with tab_size:
                      color_discrete_sequence=ui.PALETTE, title="Recommended Azure VM sizes")
         fig.update_layout(height=470, yaxis=dict(autorange="reversed", title=""),
                           xaxis_title="VMs")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
 
     with c2:
@@ -145,6 +146,7 @@ with tab_size:
                                  line=dict(dash="dash", color="rgba(128,128,128,.6)")))
         fig.update_layout(height=470, title="Source vCPU vs Azure vCPU",
                           xaxis_title="On-premises vCPU", yaxis_title="Azure vCPU")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
         st.caption("Points below the line shrank. Points above were rounded up by SKU "
                    "granularity or the minimum size floor.")
@@ -174,6 +176,7 @@ with tab_ready:
         fig = px.bar(by_env, x="environment", y="vms", color="readiness",
                      color_discrete_map=ui.READINESS_COLOURS, title="Readiness by environment")
         fig.update_layout(height=340, xaxis_title="", yaxis_title="VMs")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
 
     st.markdown("### Findings across the estate")
@@ -211,6 +214,7 @@ with tab_7r:
                      color_discrete_map=ui.STRATEGY_COLOURS,
                      title="Disposition by environment")
         fig.update_layout(height=380, xaxis_title="", yaxis_title="VMs")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
     with c2:
         st.plotly_chart(ui.donut(d["strategy"], d["vms"],

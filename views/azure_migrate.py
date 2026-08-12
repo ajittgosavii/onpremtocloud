@@ -245,6 +245,7 @@ with tab_limits:
                                      "Moderate": ui.PALETTE[0], "Minor": ui.PALETTE[7]},
                  title="Limitations by area and severity")
     fig.update_layout(height=340, xaxis_title="", yaxis_title="Limitations")
+    ui.legend_top(fig)
     st.plotly_chart(fig, width="stretch")
     ui.df_download(lim, "azure_migrate_limitations.csv")
 
@@ -285,6 +286,8 @@ with tab_hetero:
         title="Automation versus effort - bottom-right is easy, top-left is a programme")
     fig.update_layout(height=470, xaxis_title="% automatable by tooling",
                       yaxis_title="Days per unit (log)")
+    ui.legend_top(fig)
+    ui.log_ticks(fig, "y", (0.1, 0.5, 1, 5, 10, 50, 100))
     st.plotly_chart(fig, width="stretch")
     ui.note(
         "The top-left quadrant - low automation, high effort per unit - is where mainframe, "

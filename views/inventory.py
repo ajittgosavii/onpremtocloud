@@ -135,6 +135,7 @@ with tab_profile:
                      title="Guest operating systems")
         fig.update_layout(height=430, yaxis=dict(autorange="reversed", title=""),
                           xaxis_title="VMs")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
 
     with c2:
@@ -145,6 +146,7 @@ with tab_profile:
                                    marker_color=ui.PALETTE[1], opacity=0.75, nbinsx=40))
         fig.update_layout(barmode="overlay", height=430, title="Utilisation distribution",
                           xaxis_title="% utilised", yaxis_title="VMs")
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
         st.caption(
             "The mass on the left is the business case. The tail on the right is the part "
@@ -168,8 +170,13 @@ with tab_profile:
         est, x="vcpu", y="ram_gib", size="provisioned_gib", color="tier",
         hover_data=["vm_name", "app_name", "environment", "cpu_avg_pct"],
         color_discrete_sequence=ui.PALETTE, log_x=True, log_y=True,
+        size_max=34, opacity=0.62,
         title="vCPU vs RAM, sized by provisioned storage")
+    fig.update_traces(marker=dict(line=dict(width=0)))
     fig.update_layout(height=440, xaxis_title="vCPU (log)", yaxis_title="RAM GiB (log)")
+    ui.legend_top(fig)
+    ui.log_ticks(fig, "x", (1, 2, 4, 8, 16, 32, 64))
+    ui.log_ticks(fig, "y", (1, 2, 4, 8, 16, 32, 64, 128, 256))
     st.plotly_chart(fig, width="stretch")
 
 # --------------------------------------------------------------------------
