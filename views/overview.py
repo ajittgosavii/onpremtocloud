@@ -229,19 +229,36 @@ ui.takeaway(
 ui.section("How to read this model",
            "Worth saying out loud at the start of any session, so the numbers are trusted "
            "for the right reasons.")
+
+from core import assumptions as _A                                        # noqa: E402
+_reg = _A.build(sc, res)
+_s = _A.summary(_reg)
+
 c1, c2, c3 = st.columns(3)
 with c1:
-    st.markdown(
-        "**What is real.** Azure prices, SKU specifications, managed-disk tiers, reserved "
-        "instance and savings plan rates, and every published Azure Migrate product limit. "
-        "These come from Microsoft's own API and documentation.")
+    with st.container(border=True):
+        st.markdown(
+            f"**What is real** &nbsp;·&nbsp; {_s['vendor_facts']} inputs\n\n"
+            "Azure prices, SKU specifications, managed-disk tiers, reserved instance and "
+            "savings plan rates, and every published Azure Migrate product limit. These come "
+            "from Microsoft's own API and documentation, fetched live.")
+        ui.page_link("views/cost.py", "See the live rate feed", ":material/payments:")
 with c2:
-    st.markdown(
-        "**What is modelled.** The estate itself, utilisation, churn, effort per VM, cutover "
-        "risk and the on-premises cost base. Every one of these is a parameter you can change, "
-        "and none should be presented to a client without being calibrated to their data.")
+    with st.container(border=True):
+        st.markdown(
+            f"**What is modelled** &nbsp;·&nbsp; "
+            f"{_s['calibrate'] + _s['judgement']} assumptions, "
+            f"{_s['priority_1']} that matter\n\n"
+            "The estate, utilisation, churn, effort per VM, cutover risk and the on-premises "
+            "cost base. Every one is a control on a specific page - the register lists them "
+            "all and links straight to it.")
+        ui.page_link("views/assumptions.py", "Open the assumptions register",
+                     ":material/rule_settings:")
 with c3:
-    st.markdown(
-        "**What to do next.** Load a real RVTools export on the Discovery page. The synthetic "
-        "estate exists so the model can be explored and argued with before real data arrives - "
-        "not as a substitute for it.")
+    with st.container(border=True):
+        st.markdown(
+            f"**What to do next** &nbsp;·&nbsp; {_s['estate']} inputs come from the inventory\n\n"
+            "Load a real RVTools export. It replaces roughly a dozen assumptions at once and "
+            "is worth more than tuning every other parameter combined. The synthetic estate "
+            "exists to explore the model before real data arrives, not to substitute for it.")
+        ui.page_link("views/inventory.py", "Upload an inventory", ":material/upload_file:")

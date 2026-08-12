@@ -155,6 +155,8 @@ PAGES = {
     "1 - Situation": [
         st.Page("views/overview.py", title="Executive briefing",
                 icon=":material/insights:", default=True),
+        st.Page("views/assumptions.py", title="Model & assumptions",
+                icon=":material/rule_settings:"),
     ],
     "2 - Discover": [
         st.Page("views/inventory.py", title="Estate discovery",
@@ -165,6 +167,7 @@ PAGES = {
         st.Page("views/effort.py", title="Complexity & effort", icon=":material/tune:"),
     ],
     "4 - Decide": [
+        st.Page("views/provider.py", title="Cloud provider", icon=":material/cloud:"),
         st.Page("views/platform_options.py", title="Target platforms",
                 icon=":material/hub:"),
         st.Page("views/cost.py", title="Azure cost simulator", icon=":material/payments:"),

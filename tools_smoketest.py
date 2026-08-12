@@ -12,6 +12,7 @@ from streamlit.testing.v1 import AppTest
 
 PAGES = [
     "views/overview.py",
+    "views/assumptions.py",
     "views/inventory.py",
     "views/assess.py",
     "views/cost.py",
@@ -19,6 +20,7 @@ PAGES = [
     "views/plan.py",
     "views/simulate.py",
     "views/azure_migrate.py",
+    "views/provider.py",
     "views/platform_options.py",
     "views/tooling.py",
     "views/business_case.py",

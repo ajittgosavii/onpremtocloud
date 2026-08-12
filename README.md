@@ -37,10 +37,10 @@ Navigation is grouped into those acts, and every page opens with its position in
 
 | Act | Pages | The question being answered |
 |---|---|---|
-| **1 · Situation** | Executive briefing | What is the answer? |
+| **1 · Situation** | Executive briefing · Model & assumptions | What is the answer, and what are we assuming? |
 | **2 · Discover** | Estate discovery | What do you actually have? |
 | **3 · Assess** | Readiness & 7R · Complexity & effort | What should happen to it, and how hard is it? |
-| **4 · Decide** | Target platforms · Azure cost simulator · Business case | Where should it land, what does it cost, is it worth doing? |
+| **4 · Decide** | Cloud provider · Target platforms · Azure cost simulator · Business case | Which provider, where should it land, what does it cost, is it worth doing? |
 | **5 · Plan** | Wave plan & timeline · Risk simulation | How long, and how confident are we? |
 | **6 · Execute** | Azure Migrate simulator · Migration tooling | How would we actually do it? |
 | **7 · Communicate** | AI advisor | Turn it into deliverables |
@@ -61,9 +61,11 @@ always on screen.
 | Page | What it does |
 |---|---|
 | **Executive briefing** | The whole decision on one screen: run rate, programme cost, duration, NPV, payback, top risks |
+| **Model & assumptions** | Every input in the model, classified as vendor fact / estate observation / assumption, each linking to the page that controls it |
 | **Estate discovery** | Synthetic estate generator, or import a real RVTools `vInfo` export. Portfolio profile, size distribution, data-quality and migration-friction analysis |
 | **Readiness & 7R** | Right-sizing (performance-based or as-provisioned), Azure readiness (Ready / Ready with conditions / Not ready), and 7R disposition -- each explainable to the individual VM |
 | **Complexity & effort** | Thirteen weighted complexity factors driving effort, cost and cutover risk. Weights are user-adjustable |
+| **Cloud provider** | Azure vs AWS vs Google Cloud vs OCI, scored against *this* estate and decided on live licensing arithmetic rather than preference |
 | **Target platforms** | Azure IaaS, Azure PaaS, AVS, **Azure Local**, Azure Stack Hub, Azure Arc, Nutanix, Hyper-V, OpenShift Virtualization, Proxmox, GCVE, OCI, and staying on VMware |
 | **Azure cost simulator** | Live Azure retail pricing, commercial levers, lever sensitivity, cost concentration, and the raw vendor price feed |
 | **Business case** | Post-Broadcom VMware cost base versus Azure, five-year cash flow, NPV, payback, and single-assumption sensitivity |
@@ -117,6 +119,36 @@ A dedicated tab with twelve source/target paths covering homogeneous and heterog
 computes the database workstream effort and cost that the Azure Migrate plan does not include.
 On the reference estate, 19 Oracle databases moving to PostgreSQL consume more effort than the
 entire SQL Server workstream several times over.
+
+---
+
+## Cloud provider selection
+
+Provider choice is usually argued on brand preference. For a Windows-heavy VMware estate it is
+mostly arithmetic, and the simulator does that arithmetic from two live vendor APIs.
+
+The finding on the reference estate (60% Windows, 328 Windows VMs, 2,024 Windows vCPU):
+
+| | Azure | AWS | Google Cloud | OCI |
+|---|---|---|---|---|
+| Windows licence, licence-included | **$0.0460/vCPU/hr** *(live)* | **$0.0460/vCPU/hr** *(live)* | $0.040 *(list)* | $0.092/OCPU *(list)* |
+| BYOL on ordinary shared tenancy | **Yes** (Azure Hybrid Benefit) | No -- Dedicated Hosts | No -- sole-tenant nodes | Yes |
+| Free ESU for end-of-life Windows | **Yes** | No | No | No |
+| **Annual licensing cost, with SA** | **$0** | $340,515 | $297,963 | $85,200 |
+
+Azure and AWS charge **exactly the same** licence-included rate -- two figures derived
+independently from two different public APIs. So the recommendation is not "Azure is cheaper".
+It is that Azure is the only provider that lets the client *stop paying that charge* by using
+licences they already own, and the only one granting free Extended Security Updates for the
+71 out-of-support Windows servers in this estate.
+
+Flip the "holds Software Assurance" toggle off and the advantage largely disappears -- which
+is the honest counter-case the page states rather than hides.
+
+Live rate sources: **Azure Retail Prices API** and the **public AWS pricing feed behind
+calculator.aws** (median Windows-minus-Linux delta across ~905 instance types). Google Cloud's
+Billing Catalog API requires a key and Oracle publishes no equivalent feed, so those two are
+published list prices and are labelled as such in the UI.
 
 ---
 
@@ -253,17 +285,22 @@ python tools_smoketest.py           # renders all 12 pages, non-zero exit on fai
 
 ## What is real and what is modelled
 
-**Real** -- Azure prices, VM SKU specifications, managed disk tiers and IOPS, reserved instance
-and savings plan rates, Azure Migrate product limits (300/500 concurrent replications, 56 disks
-in flight, 10,000 servers per appliance, 1,000-server agentless dependency cap, confidence
-rating thresholds), Azure Local and AVS pricing models, VMware per-core licensing structure.
+Every number in the application is one of four kinds, and the **Model & assumptions** page
+lists all of them with the page that controls each:
 
-**Modelled** -- the estate and its utilisation, data churn, effort per VM, cutover failure
-probability, and the on-premises cost base. All are parameters. None should be shown to a
-client without being calibrated against their data.
+| Kind | What it means | Adjustable |
+|---|---|---|
+| **Vendor fact** | Fetched live from the Azure Retail Prices API or the AWS pricing feed, or taken from published product documentation -- Azure Migrate's replication limits, VM SKU specs, managed disk tiers | No |
+| **Estate observation** | Read from the inventory. Upload a real RVTools export and these become evidence | Via the inventory |
+| **Calibrate with client** | A defensible default standing in for a figure only the client has -- their rate card, renewal quote, circuit capacity, hurdle rate | Yes |
+| **Modelling judgement** | A deliberate choice with no single right answer, such as effort per VM or WAN efficiency -- exposed as a control specifically so it can be argued with | Yes |
 
-The distinction is deliberate and stated on every page. This is a decision aid for structuring
-an argument and testing its sensitivity -- not a quotation.
+Roughly 50 inputs are catalogued, of which about 15 are flagged **calibrate first** because the
+conclusion genuinely depends on them. The register exports to CSV, which makes it a better
+leave-behind than a number the client cannot question.
+
+The distinction is deliberate and stated on the Executive briefing. This is a decision aid for
+structuring an argument and testing its sensitivity -- not a quotation.
 
 ---
 

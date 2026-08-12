@@ -46,9 +46,11 @@ BAND_COLOURS = {"Simple": "#2F9E68", "Moderate": "#E08A2E",
 NARRATIVE: list[tuple[str, str, str]] = [
     # (act, page title, one-line purpose used as the eyebrow)
     ("Situation", "Executive briefing", "The answer, up front"),
+    ("Situation", "Model & assumptions", "What we are assuming, and where to change it"),
     ("Discover", "Estate discovery", "What you actually have"),
     ("Assess", "Readiness & 7R", "What should happen to each workload"),
     ("Assess", "Complexity & effort", "How hard it is, and why"),
+    ("Decide", "Cloud provider", "Which provider suits this estate"),
     ("Decide", "Target platforms", "Where it should land"),
     ("Decide", "Azure cost simulator", "What it costs to run"),
     ("Decide", "Business case", "Whether it is worth doing"),
@@ -358,6 +360,21 @@ def section(title: str, subtitle: str = "") -> None:
 
 def note(text: str, kind: str = "note") -> None:
     st.markdown(f"<div class='{kind}'>{text}</div>", unsafe_allow_html=True)
+
+
+def page_link(path: str, label: str, icon: str = "", container=None) -> None:
+    """``st.page_link`` that degrades to a caption when no page registry exists.
+
+    The registry is only populated by ``st.navigation`` in app.py, so a bare page
+    executed on its own -- which is how the headless smoke test runs them --
+    would otherwise raise. The link is navigation sugar, not content, so falling
+    back keeps every page independently renderable.
+    """
+    target = container if container is not None else st
+    try:
+        target.page_link(path, label=label, icon=icon or None)
+    except Exception:
+        target.caption(f"-> {label}")
 
 
 def takeaway(text: str, label: str = "The point to make") -> None:
