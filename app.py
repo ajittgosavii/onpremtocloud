@@ -1,7 +1,8 @@
-"""VMware to Azure Migration Decision Simulator.
+"""CISCLD Ascend -- on-prem to cloud decision simulator.
 
-Entry point. The sidebar holds the controls that affect every page; navigation is
-grouped into the seven acts of the client narrative defined in core.ui.NARRATIVE.
+Entry point. Signed-out visitors get the sign-in cover and nothing else; signed-in
+ones get the sidebar of controls that affect every page, and navigation grouped
+into the seven acts of the client narrative defined in core.ui.NARRATIVE.
 
 Run with:  streamlit run app.py
 """
@@ -11,11 +12,13 @@ from dataclasses import replace
 
 import streamlit as st
 
+from core import auth, brand      # imports only -- no output before set_page_config
+
 st.set_page_config(
-    page_title="VMware to Azure Migration Simulator",
-    page_icon=":material/cloud_sync:",
+    page_title=brand.PAGE_TITLE,
+    page_icon=brand.PAGE_ICON,
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="expanded" if auth.is_signed_in() else "collapsed",
 )
 
 try:
@@ -24,8 +27,18 @@ try:
 except Exception:
     pass
 
-from core import azure_catalog as cat          # noqa: E402
-from core import llm, pricing, scenario, ui    # noqa: E402
+from core import azure_catalog as cat                    # noqa: E402
+from core import llm, login_ui, pricing, scenario, ui    # noqa: E402
+
+# --------------------------------------------------------------------------
+# Gate. Nothing below this runs for a signed-out visitor.
+# --------------------------------------------------------------------------
+auth.enforce_idle_timeout()
+if not auth.is_signed_in():
+    if auth.restore_session():
+        st.rerun()               # re-enter with the sidebar expanded
+    login_ui.render()
+    st.stop()
 
 ui.install_theme()
 ui.inject_css()
@@ -38,10 +51,12 @@ def sidebar() -> None:
     with st.sidebar:
         st.markdown(
             "<div style='font-size:.68rem;font-weight:750;letter-spacing:.14em;"
-            "text-transform:uppercase;color:#3B6FD4;margin-bottom:.15rem'>"
-            "Migration Decision Simulator</div>"
-            "<div style='font-size:1.02rem;font-weight:680;letter-spacing:-.015em;"
-            "margin-bottom:.9rem'>VMware &rarr; Azure</div>",
+            f"text-transform:uppercase;color:#3B6FD4;margin-bottom:.15rem'>"
+            f"{brand.SUITE}</div>"
+            "<div style='font-size:1.14rem;font-weight:700;letter-spacing:-.025em;"
+            f"margin-bottom:.1rem'>{brand.PRODUCT}</div>"
+            "<div style='font-size:.74rem;opacity:.62;line-height:1.4;"
+            f"margin-bottom:.9rem'>{brand.DESCRIPTOR}</div>",
             unsafe_allow_html=True)
 
         present = st.toggle(
@@ -142,6 +157,11 @@ def sidebar() -> None:
             st.caption(
                 "Figures are simulated from the estate profile you configure and priced "
                 "against live Azure retail rates. A decision aid, not a quotation.")
+
+        # Always available, presentation mode included -- you have to be able to
+        # sign out of a machine you were projecting from.
+        st.divider()
+        auth.account_panel()
 
 
 sidebar()

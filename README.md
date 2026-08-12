@@ -1,4 +1,8 @@
-# VMware to Azure Migration Decision Simulator
+# CISCLD Ascend
+
+**On-prem to cloud decision simulator.** *(Formerly "VMware to Azure Migration Decision
+Simulator". The product name lives in `core/brand.py` -- change it there and it changes
+everywhere.)*
 
 A Streamlit decision-support simulator for moving an on-premises VMware vSphere estate to
 Microsoft Azure. Built around a 547-VM reference estate (60% Windows, 40% Linux), but the
@@ -213,13 +217,71 @@ pip install -r requirements.txt
 streamlit run app.py
 ```
 
-Opens on `http://localhost:8501`.
+Opens on `http://localhost:8501`, at the sign-in cover.
+
+---
+
+## Signing in
+
+The application is gated. With nothing configured it runs on a single demo account
+(`demo` / `ascend`) and says so on the sign-in page, so a fresh clone works immediately.
+**Configure real accounts before any deployment is shared** -- the demo credentials are
+printed on the page for anyone who opens it.
+
+Generate a password hash, then paste the block it prints into `.streamlit/secrets.toml`
+(see `.streamlit/secrets.toml.example`) or into **Settings > Secrets** on Streamlit
+Community Cloud:
+
+```bash
+py -3.12 tools_hashpw.py --user ajit --name "Ajit Gosavi" --role Owner
+```
+
+```toml
+[auth]
+idle_timeout_minutes = 480      # 0 disables
+
+[auth.users.ajit]
+name = "Ajit Gosavi"
+role = "Owner"
+password_hash = "pbkdf2_sha256$240000$..."
+```
+
+Locally you can use `APP_USERS` in `.env` instead -- a JSON object of username to record.
+A record takes `password_hash` or, for a local demo only, `password` in the clear.
+
+**What the gate does.** PBKDF2-HMAC-SHA256 at 240,000 iterations with a per-account salt,
+`hmac.compare_digest` on every comparison, and the same work done for an unknown username
+as for a known one so the response time does not leak which is which. Five consecutive
+failures start a five-minute cool-off. Sessions expire after `idle_timeout_minutes` of
+silence.
+
+**"Stay signed in" puts a bearer token in the URL. Know what that means.** Streamlit
+offers no cookie API, so a session that survives a browser reload has nowhere else to
+live. The token is HMAC-signed, so it cannot be forged, and a password change invalidates
+every outstanding one -- but anyone who obtains the URL is signed in until it expires, and
+a URL reaches more places than people expect: browser history, a link pasted into chat, a
+screen recording, and the `Referer` header of any outbound link clicked from the app.
+
+It is therefore **off by default and lives 12 hours**, which covers a working day of
+reloads and nothing more. Leave it off on a shared or projected machine. If you want a
+genuinely private persistent session, that needs a cookie component
+(`extra-streamlit-components`), which is a dependency this project does not currently
+carry.
+
+**What it does not do.** The cool-off is per browser session, so it slows a person at a
+keyboard, not a distributed attacker. There is no audit log, no password reset, and no way
+to revoke a single outstanding token short of changing that account's password. It is a
+gate on a decision-support tool, not an identity system. Put it behind SSO or a network
+control before it holds anything confidential.
+
+Everything is stdlib -- `hashlib`, `hmac`, `secrets` -- so the gate adds no dependency and
+no new hosted-deployment failure mode.
 
 ### Deploying to Streamlit Community Cloud
 
-Point it at `app.py`. No secrets are required -- the pricing APIs are unauthenticated and the
-OpenAI key is optional and entered at runtime. Python 3.12 or later; set the version under
-**Advanced settings**.
+Point it at `app.py`. The pricing APIs are unauthenticated and the OpenAI key is optional
+and entered at runtime, so the only secrets worth setting are the `[auth]` accounts above.
+Python 3.12 or later; set the version under **Advanced settings**.
 
 **`.streamlit/config.toml` is load-bearing, not decoration.** It sets
 `fileWatcherType = "none"`, and without it the app crashes on every deploy.
@@ -294,8 +356,11 @@ the app says so.
 ## Layout
 
 ```
-app.py                      Entry point: sidebar controls and navigation
+app.py                      Entry point: sign-in gate, sidebar controls, navigation
 core/
+  brand.py                  Product name, descriptor, sign-in palette and readout
+  auth.py                   Account store, PBKDF2 hashing, session lifetime
+  login_ui.py               The sign-in cover
   azure_catalog.py          VM SKUs, managed disk tiers, regions, platform ceilings
   pricing.py                Azure Retail Prices API client with disk cache
   inventory.py              Synthetic estate generator + RVTools import
@@ -315,6 +380,8 @@ core/
 views/                      One module per page
 tools_selftest.py           Headless engine test (pricing + full chain)
 tools_smoketest.py          Renders every page headlessly via streamlit.testing
+tools_authtest.py           Hashing, tokens, lockout, and the rendered sign-in cover
+tools_hashpw.py             Prints the secrets.toml block for an account
 ```
 
 ### Tests
@@ -323,6 +390,7 @@ tools_smoketest.py          Renders every page headlessly via streamlit.testing
 python tools_selftest.py pricing     # live Azure API + meter validation
 python tools_selftest.py engines     # full deterministic chain
 python tools_provider_test.py        # live AWS + Azure licensing comparison
+python tools_authtest.py             # the sign-in gate, logic and rendered
 python tools_smoketest.py            # renders all 14 pages, non-zero exit on failure
 python tools_deploycheck.py          # the failures that only appear when hosted
 ```

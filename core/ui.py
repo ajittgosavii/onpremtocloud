@@ -269,6 +269,18 @@ def _css(present: bool) -> str:
   }}
   .side-kpi span:first-child {{ opacity: .70; }}
   .side-kpi span:last-child {{ font-weight: 700; font-variant-numeric: tabular-nums; }}
+
+  /* ---- signed-in account block ---- */
+  .acct {{ display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }}
+  .acct-mark {{
+    width: 32px; height: 32px; border-radius: 9px; flex: 0 0 32px;
+    display: flex; align-items: center; justify-content: center;
+    background: linear-gradient(96deg, var(--accent), var(--accent-2));
+    color: #fff; font-size: .74rem; font-weight: 700; letter-spacing: .02em;
+  }}
+  .acct-name {{ font-size: .855rem; font-weight: 650; line-height: 1.25; }}
+  .acct-role {{ font-size: .70rem; opacity: .62; letter-spacing: .04em;
+                text-transform: uppercase; }}
   {".stExpander {display:none !important;}" if present else ""}
 </style>
 """
