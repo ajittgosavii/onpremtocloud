@@ -1,7 +1,5 @@
 """Business case: staying on VMware versus migrating to Azure."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pandas as pd

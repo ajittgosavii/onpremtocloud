@@ -6,8 +6,6 @@ inputs sampled from PERT (three-point) distributions, and reports the
 percentile bands plus which uncertainty actually drives the spread.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -185,8 +183,11 @@ def tornado(sim: pd.DataFrame, target: str = "total_programme_cost") -> pd.DataF
         x = sim[driver]
         if x.std() == 0:
             continue
-        # Spearman: robust to the non-linear way these drivers combine.
-        corr = float(pd.Series(x).corr(y, method="spearman"))
+        # Spearman rank correlation, robust to the non-linear way these drivers
+        # combine. Computed as Pearson on the ranks rather than via
+        # pandas' method="spearman", which would pull in SciPy purely for this
+        # one line -- a heavy dependency for an identical result.
+        corr = float(x.rank().corr(y.rank()))
         # Swing: outcome at the driver's P10 vs P90.
         lo_mask = x <= np.percentile(x, 20)
         hi_mask = x >= np.percentile(x, 80)

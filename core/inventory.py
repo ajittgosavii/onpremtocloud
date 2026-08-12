@@ -7,8 +7,6 @@ that actually block or slow a migration (RDMs, shared disks, snapshots, stale
 VMware Tools, vGPU, MSCS clusters).
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 

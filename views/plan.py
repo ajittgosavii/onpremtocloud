@@ -1,7 +1,5 @@
 """Wave planning and schedule simulation."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pandas as pd

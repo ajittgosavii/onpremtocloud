@@ -1,7 +1,5 @@
 """Monte Carlo simulation of programme cost, duration and risk."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import numpy as np

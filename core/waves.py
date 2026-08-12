@@ -14,8 +14,6 @@ Modelling both is what stops a plan from claiming a 40 TB wave will land in a
 weekend on a 500 Mbps link.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import numpy as np

@@ -17,8 +17,6 @@ Every number is derived, not hard-coded, so changing the estate or the link
 speed changes the plan.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np

@@ -1,8 +1,6 @@
 """Azure Migrate simulator: how the tool actually behaves against this estate,
 and - just as important - what it cannot do at all."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import numpy as np

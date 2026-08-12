@@ -1,7 +1,5 @@
 """Cost simulator, priced against live Azure retail rates."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pandas as pd

@@ -1,7 +1,5 @@
 """Discovery and inventory: generate a synthetic estate or import a real one."""
 
-from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 import plotly.express as px

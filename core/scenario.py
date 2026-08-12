@@ -5,8 +5,6 @@ lives here behind ``@st.cache_data`` and is keyed on the scenario parameters.
 Pages read the result; they never recompute it themselves.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field, asdict, replace
 
 import pandas as pd

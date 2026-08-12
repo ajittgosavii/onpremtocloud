@@ -9,10 +9,9 @@ when the venue Wi-Fi does not. If the API is unreachable and no cache exists, th
 callers fall back to :mod:`core.fallback_prices`.
 """
 
-from __future__ import annotations
-
 import hashlib
 import json
+import tempfile
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,14 +45,36 @@ class FetchResult:
 # --------------------------------------------------------------------------
 # Transport
 # --------------------------------------------------------------------------
-def _cache_path(key: str) -> Path:
-    CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    return CACHE_DIR / f"{hashlib.sha256(key.encode()).hexdigest()[:20]}.json"
+def _cache_dir() -> Path | None:
+    """Writable cache directory, or None if there isn't one.
+
+    Hosted environments frequently mount the application directory read-only, so
+    the cache has to be optional rather than assumed. Falls back to the system
+    temp directory, and finally to no caching at all -- the app still works, it
+    just re-fetches from the vendor APIs.
+    """
+    for candidate in (CACHE_DIR, Path(tempfile.gettempdir()) / "migsim-cache"):
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            probe = candidate / ".write-test"
+            probe.write_text("ok", encoding="utf-8")
+            probe.unlink(missing_ok=True)
+            return candidate
+        except Exception:
+            continue
+    return None
+
+
+def _cache_path(key: str) -> Path | None:
+    d = _cache_dir()
+    if d is None:
+        return None
+    return d / f"{hashlib.sha256(key.encode()).hexdigest()[:20]}.json"
 
 
 def _read_cache(key: str) -> tuple[list[dict], float] | None:
     p = _cache_path(key)
-    if not p.exists():
+    if p is None or not p.exists():
         return None
     try:
         blob = json.loads(p.read_text(encoding="utf-8"))
@@ -63,9 +84,15 @@ def _read_cache(key: str) -> tuple[list[dict], float] | None:
 
 
 def _write_cache(key: str, items: list[dict]) -> None:
-    _cache_path(key).write_text(
-        json.dumps({"items": items, "fetched_at": time.time()}), encoding="utf-8"
-    )
+    """Best effort. A cache miss is a performance problem, not a failure."""
+    p = _cache_path(key)
+    if p is None:
+        return
+    try:
+        p.write_text(json.dumps({"items": items, "fetched_at": time.time()}),
+                     encoding="utf-8")
+    except Exception:
+        pass
 
 
 def fetch(odata_filter: str, currency: str = "USD", max_pages: int = 40,

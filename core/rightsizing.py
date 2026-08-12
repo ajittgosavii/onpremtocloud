@@ -12,8 +12,6 @@ The comfort factor and percentile are the same knobs Azure Migrate exposes,
 so a number produced here can be reconciled against a real assessment.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import numpy as np

@@ -26,8 +26,6 @@ Google and Oracle publish no equivalent unauthenticated feed, so their licence
 rates are taken from published list pricing and are labelled as such.
 """
 
-from __future__ import annotations
-
 import json
 import time
 from dataclasses import dataclass, field
@@ -238,6 +236,14 @@ PROVIDER_BY_KEY = {p.key: p for p in PROVIDERS}
 # --------------------------------------------------------------------------
 HOURS = 730.0
 
+# Extended Security Updates list at roughly 75% of the full licence price per
+# year and escalate. This is the per-server-per-year order of magnitude for
+# Windows Server Standard; it is an assumption, and it is shown in the UI.
+# It is the *default* only -- callers pass their own value through
+# LicensingInputs, because a Streamlit server handles many sessions at once and
+# a module-level global set from a widget would leak between them.
+ESU_PER_VM_YEAR = 1200.0
+
 
 @dataclass
 class LicensingInputs:
@@ -251,13 +257,7 @@ class LicensingInputs:
     owns_software_assurance: bool = True
     azure_windows_premium_per_vcpu_hr: float = 0.046
     aws_windows_premium_per_vcpu_hr: float = 0.046
-    esu_cost_per_vm_year: float = 0.0   # filled from the ESU model below
-
-
-# Extended Security Updates list at roughly 75% of the full licence price per
-# year and escalate. This is the per-server-per-year order of magnitude for
-# Windows Server Standard; it is an assumption, and it is shown in the UI.
-ESU_PER_VM_YEAR = 1200.0
+    esu_per_vm_year: float = ESU_PER_VM_YEAR
 
 
 def licensing_comparison(inp: LicensingInputs) -> pd.DataFrame:
@@ -300,7 +300,7 @@ def licensing_comparison(inp: LicensingInputs) -> pd.DataFrame:
                 dedicated = 0.0
                 detail.append("License Included pricing, derived live from the AWS pricing "
                               "feed.")
-            esu = inp.eol_windows_vms * ESU_PER_VM_YEAR
+            esu = inp.eol_windows_vms * inp.esu_per_vm_year
             detail.append("Extended Security Updates must be purchased.")
 
         elif p.key == "gcp":
@@ -316,14 +316,14 @@ def licensing_comparison(inp: LicensingInputs) -> pd.DataFrame:
                 dedicated = 0.0
                 detail.append(f"Licence-included at a published "
                               f"${GCP_WINDOWS_PER_VCPU_HR:.3f} per vCPU per hour.")
-            esu = inp.eol_windows_vms * ESU_PER_VM_YEAR
+            esu = inp.eol_windows_vms * inp.esu_per_vm_year
             detail.append("Extended Security Updates must be purchased.")
 
         else:  # oci
             win = (0.0 if inp.owns_software_assurance
                    else inp.windows_vcpu / 2 * OCI_WINDOWS_PER_OCPU_HR * HOURS * 12)
             dedicated = 0.0
-            esu = inp.eol_windows_vms * ESU_PER_VM_YEAR
+            esu = inp.eol_windows_vms * inp.esu_per_vm_year
             detail.append("BYOL is permitted on shared tenancy." if inp.owns_software_assurance
                           else f"Licence-included at ${OCI_WINDOWS_PER_OCPU_HR:.3f} per OCPU "
                                "per hour (two vCPU per OCPU).")
@@ -415,7 +415,8 @@ def rank_providers(weights: dict[str, float]) -> pd.DataFrame:
 
 def recommendation(rank: pd.DataFrame, lic: pd.DataFrame, windows_pct: float,
                    sql_vms: int, eol_windows_vms: int, oracle_vms: int,
-                   total_vms: int, currency: str = "USD") -> dict:
+                   total_vms: int, currency: str = "USD",
+                   esu_per_vm_year: float = ESU_PER_VM_YEAR) -> dict:
     """``eol_windows_vms`` is Windows-only on purpose: Extended Security Updates
     apply to Windows Server and SQL Server, not to end-of-life Linux."""
     """A single, defensible answer with the reasons that produced it."""
@@ -440,7 +441,7 @@ def recommendation(rank: pd.DataFrame, lic: pd.DataFrame, windows_pct: float,
             f"**{eol_windows_vms} Windows VMs are past end of support.** Free Extended "
             "Security Updates are available only while the workload runs on Azure. Everywhere "
             f"else they are a purchase -- roughly {currency} "
-            f"{eol_windows_vms * ESU_PER_VM_YEAR:,.0f} a year on this estate, recurring until "
+            f"{eol_windows_vms * esu_per_vm_year:,.0f} a year on this estate, recurring until "
             "the operating systems are upgraded.")
     if sql_vms:
         reasons.append(

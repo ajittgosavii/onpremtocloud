@@ -1,7 +1,5 @@
 """Cloud provider selection: one recommendation, and the arithmetic behind it."""
 
-from __future__ import annotations
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
@@ -77,8 +75,6 @@ if not ui.presenting():
 else:
     sa, ms_shop, esu_cost = True, True, providers.ESU_PER_VM_YEAR
 
-providers.ESU_PER_VM_YEAR = float(esu_cost)
-
 # --------------------------------------------------------------------------
 # Live licence rates
 # --------------------------------------------------------------------------
@@ -105,13 +101,14 @@ inp = providers.LicensingInputs(
     total_vcpu=int(sized["azure_vcpu"].sum()), owns_software_assurance=sa,
     azure_windows_premium_per_vcpu_hr=azure_prem,
     aws_windows_premium_per_vcpu_hr=aws_prem,
+    esu_per_vm_year=float(esu_cost),
 )
 lic = providers.licensing_comparison(inp)
 weights = providers.estate_weights(s["windows_pct"], sql_vms, oracle_vms,
                                    s["eol_os_count"], blocked, len(est), ms_shop)
 rank = providers.rank_providers(weights)
 rec = providers.recommendation(rank, lic, s["windows_pct"], sql_vms, eol_windows,
-                               oracle_vms, len(est), cur)
+                               oracle_vms, len(est), cur, float(esu_cost))
 
 for n in notes:
     ui.note(n, "warn")

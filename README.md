@@ -215,6 +215,32 @@ streamlit run app.py
 
 Opens on `http://localhost:8501`.
 
+### Deploying to Streamlit Community Cloud
+
+Point it at `app.py`. No secrets are required -- the pricing APIs are unauthenticated and the
+OpenAI key is optional and entered at runtime.
+
+Two things that only bite on a hosted server, both now guarded by `tools_deploycheck.py`:
+
+- **No `from __future__ import annotations` anywhere.** With it, every annotation is a string,
+  so `dataclasses` calls `_is_type()`, which does `sys.modules.get(cls.__module__).__dict__`.
+  Under a module reloader the module is not in `sys.modules`, so that returns `None` and every
+  `@dataclass` raises `AttributeError: 'NoneType' object has no attribute '__dict__'`. This is
+  not version-specific -- it reproduces on 3.12 as readily as on 3.14.
+- **No SciPy.** `pandas.corr(method="spearman")` requires it. The tornado chart computes the
+  same rank correlation as Pearson-on-ranks instead, so SciPy stays out of `requirements.txt`.
+
+The price cache degrades gracefully if the application directory is read-only: it falls back to
+the system temp directory, and then to no caching at all. The app still works, it just re-fetches.
+
+Run the guard before pushing a deploy:
+
+```bash
+python tools_deploycheck.py     # exit 1 on any problem
+```
+
+Python 3.12 or later. Set the version under **Advanced settings** when you deploy.
+
 ### OpenAI (optional)
 
 The advisor is the only feature that needs a key. Every calculation works without it.
@@ -276,9 +302,11 @@ tools_smoketest.py          Renders every page headlessly via streamlit.testing
 ### Tests
 
 ```bash
-python tools_selftest.py pricing    # live API + meter validation
-python tools_selftest.py engines    # full deterministic chain
-python tools_smoketest.py           # renders all 12 pages, non-zero exit on failure
+python tools_selftest.py pricing     # live Azure API + meter validation
+python tools_selftest.py engines     # full deterministic chain
+python tools_provider_test.py        # live AWS + Azure licensing comparison
+python tools_smoketest.py            # renders all 14 pages, non-zero exit on failure
+python tools_deploycheck.py          # the failures that only appear when hosted
 ```
 
 ---

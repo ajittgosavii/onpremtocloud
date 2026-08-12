@@ -6,8 +6,6 @@ up on load. It is built to be projected in front of a client, so type is large,
 contrast is high, and every page opens by saying where it sits in the story.
 """
 
-from __future__ import annotations
-
 import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st

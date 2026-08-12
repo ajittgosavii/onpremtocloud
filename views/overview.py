@@ -1,7 +1,5 @@
 """Executive overview: the whole decision on one page."""
 
-from __future__ import annotations
-
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
@@ -238,7 +236,7 @@ c1, c2, c3 = st.columns(3)
 with c1:
     with st.container(border=True):
         st.markdown(
-            f"**What is real** &nbsp;·&nbsp; {_s['vendor_facts']} inputs\n\n"
+            f"**What is real** &nbsp;&middot;&nbsp; {_s['vendor_facts']} inputs\n\n"
             "Azure prices, SKU specifications, managed-disk tiers, reserved instance and "
             "savings plan rates, and every published Azure Migrate product limit. These come "
             "from Microsoft's own API and documentation, fetched live.")
@@ -246,7 +244,7 @@ with c1:
 with c2:
     with st.container(border=True):
         st.markdown(
-            f"**What is modelled** &nbsp;·&nbsp; "
+            f"**What is modelled** &nbsp;&middot;&nbsp; "
             f"{_s['calibrate'] + _s['judgement']} assumptions, "
             f"{_s['priority_1']} that matter\n\n"
             "The estate, utilisation, churn, effort per VM, cutover risk and the on-premises "
@@ -257,7 +255,7 @@ with c2:
 with c3:
     with st.container(border=True):
         st.markdown(
-            f"**What to do next** &nbsp;·&nbsp; {_s['estate']} inputs come from the inventory\n\n"
+            f"**What to do next** &nbsp;&middot;&nbsp; {_s['estate']} inputs come from the inventory\n\n"
             "Load a real RVTools export. It replaces roughly a dozen assumptions at once and "
             "is worth more than tuning every other parameter combined. The synthetic estate "
             "exists to explore the model before real data arrives, not to substitute for it.")

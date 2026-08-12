@@ -16,8 +16,6 @@ assuming?" has a single, complete, exportable answer -- and so every assumption
 carries a link to the page that controls it.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import pandas as pd

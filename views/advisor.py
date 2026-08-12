@@ -1,7 +1,5 @@
 """AI advisor: OpenAI turns the computed model into deliverables and answers questions."""
 
-from __future__ import annotations
-
 import json
 
 import streamlit as st

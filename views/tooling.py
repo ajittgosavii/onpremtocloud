@@ -1,7 +1,5 @@
 """Migration tooling market: alternatives to Azure Migrate and when each wins."""
 
-from __future__ import annotations
-
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go

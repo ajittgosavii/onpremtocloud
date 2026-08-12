@@ -7,8 +7,6 @@ not VM count -- and it renews. This model makes every on-premises component
 visible and adjustable, then discounts both sides to present value.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np

@@ -11,8 +11,6 @@ move the number:
 * Backup, DR, egress and platform overhead
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field
 
 import numpy as np

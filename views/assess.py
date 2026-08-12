@@ -1,7 +1,5 @@
 """Assessment: right-sizing, Azure readiness and 7R disposition."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pandas as pd

@@ -11,8 +11,6 @@ The weights are exposed in the UI so a client can argue with them -- which is
 the point of a simulator, as opposed to a spreadsheet nobody trusts.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, field, asdict
 
 import numpy as np

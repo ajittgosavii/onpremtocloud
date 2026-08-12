@@ -1,7 +1,5 @@
 """Complexity, effort and migration cost model."""
 
-from __future__ import annotations
-
 from dataclasses import replace
 
 import pandas as pd

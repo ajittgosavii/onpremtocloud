@@ -9,8 +9,6 @@ It is never asked to invent a price or a limit. Every figure in a prompt comes
 from the engines or from the live Azure Retail Prices API.
 """
 
-from __future__ import annotations
-
 import json
 import os
 from dataclasses import dataclass

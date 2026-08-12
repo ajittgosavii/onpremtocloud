@@ -13,8 +13,6 @@ Both are deterministic and explainable: every verdict carries the list of
 findings that produced it, so a client can challenge any single VM.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 

@@ -6,8 +6,6 @@ starting points for a client conversation, not vendor-supplied marketing
 numbers -- every one is defensible from the capability notes on the same row.
 """
 
-from __future__ import annotations
-
 import numpy as np
 import pandas as pd
 

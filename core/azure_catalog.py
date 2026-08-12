@@ -5,8 +5,6 @@ right-sizing search space; live unit prices come from core.pricing (Azure Retail
 Prices API) and are joined onto these rows by ``arm_name``.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass, asdict
 from typing import Literal
 

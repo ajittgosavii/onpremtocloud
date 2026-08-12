@@ -16,8 +16,6 @@ Non-AWS clouds and non-VMware hypervisors are included because "migrate to
 Azure" is a decision that should be tested against its alternatives, not assumed.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 
 import numpy as np

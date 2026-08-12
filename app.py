@@ -6,8 +6,6 @@ grouped into the seven acts of the client narrative defined in core.ui.NARRATIVE
 Run with:  streamlit run app.py
 """
 
-from __future__ import annotations
-
 import os
 from dataclasses import replace
 

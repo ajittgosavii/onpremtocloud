@@ -3,7 +3,6 @@
 Run with:  py -3.12 tools_smoketest.py
 Exits non-zero if any page raises.
 """
-from __future__ import annotations
 
 import sys
 import time
