@@ -177,8 +177,45 @@ def check_requirements_cover_imports() -> list[str]:
     return bad
 
 
+def check_views_only_use_existing_ui() -> list[str]:
+    """Every ``ui.x`` a page calls must exist in core/ui.py, and app.py's
+    REQUIRED_UI_API must match ui.API_VERSION.
+
+    A page that calls a function core.ui does not have crashes only at runtime,
+    and on a hosted deploy the message is redacted to "AttributeError", which
+    says nothing. Worse, the pages are re-executed from disk on every run while
+    core/ stays in sys.modules, so new page code meets an old core.ui until the
+    process restarts. Catching the mismatch here is the cheap half; app.py's
+    version guard turns the remaining case into an instruction to reboot.
+    """
+    import ast
+    import re
+
+    from core import ui as ui_mod
+
+    available = {n for n in dir(ui_mod) if not n.startswith("_")}
+    bad = []
+    for path in sorted(pathlib.Path("views").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+        for node in ast.walk(tree):
+            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                    and node.value.id == "ui" and node.attr not in available):
+                bad.append(f"{path.name}:{node.lineno} calls ui.{node.attr}, "
+                           f"which core/ui.py does not define")
+
+    app_src = pathlib.Path("app.py").read_text(encoding="utf-8")
+    match = re.search(r"^REQUIRED_UI_API\s*=\s*(\d+)", app_src, re.M)
+    if not match:
+        bad.append("app.py no longer declares REQUIRED_UI_API")
+    elif int(match.group(1)) != ui_mod.API_VERSION:
+        bad.append(f"app.py wants ui API {match.group(1)} but core/ui.py "
+                   f"declares {ui_mod.API_VERSION}; bump them together")
+    return bad
+
+
 CHECKS = [
     ("file watcher disabled (the reloader race)", check_file_watcher_disabled),
+    ("views only call functions core/ui.py defines", check_views_only_use_existing_ui),
     ("no `from __future__ import annotations`", check_no_future_annotations),
     ("dataclasses survive a module reload", check_dataclasses_survive_reload),
     ("no import cycles inside core/", check_no_import_cycles),

@@ -40,6 +40,29 @@ if not auth.is_signed_in():
     login_ui.render()
     st.stop()
 
+# --------------------------------------------------------------------------
+# Stale-module guard.
+#
+# .streamlit/config.toml disables the file watcher, which is load-bearing: it is
+# what stopped the deploy crashes. The cost is that a hosted redeploy pulls new
+# source and re-executes the *pages* from disk on every run, while core/ stays in
+# sys.modules from process start. So a page can call a core.ui function that the
+# running interpreter has never seen, and Streamlit Cloud reports it as a
+# redacted AttributeError with no hint about what to do. Say what to do.
+# --------------------------------------------------------------------------
+REQUIRED_UI_API = 2
+
+if getattr(ui, "API_VERSION", 0) < REQUIRED_UI_API:
+    st.error(
+        f"**This server is running an older copy of `core/ui.py` than the pages "
+        f"expect** (has API {getattr(ui, 'API_VERSION', 0)}, needs "
+        f"{REQUIRED_UI_API}).\n\n"
+        "The source on disk is current; the process still holds the modules it "
+        "imported at start-up. **Reboot the app** -- on Streamlit Community Cloud, "
+        "*Manage app* in the lower right, then *Reboot*. A redeploy on its own does "
+        "not reload an already-imported module while the file watcher is off.")
+    st.stop()
+
 ui.install_theme()
 ui.inject_css()
 

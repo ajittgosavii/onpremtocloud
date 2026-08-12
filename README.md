@@ -304,6 +304,27 @@ AttributeError: 'NoneType'    dataclasses' _is_type() did
 A server never needs hot reload -- a redeploy restarts the process. For local development with
 auto-reload, override it: `streamlit run app.py --server.fileWatcherType auto`.
 
+#### Rebooting after a deploy
+
+Disabling the watcher has one cost, and it bites in a specific case. Streamlit executes the
+**pages** from disk on every run (`exec(code, module.__dict__)` in `navigation/page.py`), but
+`core/` is imported once and then lives in `sys.modules` for the life of the process. A git
+pull updates both on disk -- so a page can call a `core.ui` function the running interpreter
+has never seen:
+
+```
+AttributeError    views/inventory.py -> ui.legend_top(fig)
+                  the file on disk has it; the imported module predates it
+```
+
+**After any push that adds to `core/`, reboot the app** -- *Manage app* in the lower right,
+then *Reboot*. Pushing alone is not enough. Pushes that only touch `views/` are fine.
+
+`app.py` checks `ui.API_VERSION` against its own `REQUIRED_UI_API` and, on a mismatch, says
+exactly this instead of letting Streamlit Cloud show a redacted `AttributeError`. Bump both
+when adding a `core.ui` function that pages call; `tools_deploycheck.py` fails if they drift,
+and also fails if any page calls a `ui.` name that does not exist.
+
 Three further hardenings, all guarded by `tools_deploycheck.py`:
 
 - **No `from __future__ import annotations` anywhere.** With it every annotation is a string, so

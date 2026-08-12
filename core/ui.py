@@ -10,6 +10,14 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import streamlit as st
 
+# Bumped whenever a function is added here that views/ then call. app.py checks
+# it and stops with an instruction rather than letting a stale module surface as
+# a redacted AttributeError. See "Rebooting after a deploy" in the README: with
+# the file watcher disabled, a hosted redeploy re-executes the pages from disk
+# but keeps the already-imported core modules, so new page code can meet an old
+# core.ui until the process restarts.
+API_VERSION = 2
+
 # --------------------------------------------------------------------------
 # Palette
 # --------------------------------------------------------------------------
