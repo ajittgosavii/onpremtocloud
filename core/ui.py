@@ -16,7 +16,7 @@ import streamlit as st
 # the file watcher disabled, a hosted redeploy re-executes the pages from disk
 # but keeps the already-imported core modules, so new page code can meet an old
 # core.ui until the process restarts.
-API_VERSION = 3
+API_VERSION = 4
 
 # --------------------------------------------------------------------------
 # Palette
@@ -59,6 +59,7 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Assess", "Complexity & effort", "How hard it is, and why"),
     ("Decide", "Cloud provider", "Which provider suits this estate"),
     ("Decide", "Target platforms", "Where it should land"),
+    ("Decide", "Current & future state", "What it looks like before and after"),
     ("Decide", "Azure cost simulator", "What it costs to run"),
     ("Decide", "Business case", "Whether it is worth doing"),
     ("Plan", "Wave plan & timeline", "How long, and what constrains it"),
@@ -81,6 +82,7 @@ _PAGE_PATHS = {
     "Complexity & effort": "views/effort.py",
     "Cloud provider": "views/provider.py",
     "Target platforms": "views/platform_options.py",
+    "Current & future state": "views/future_state.py",
     "Azure cost simulator": "views/cost.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",
@@ -316,6 +318,34 @@ def _css(present: bool) -> str:
     font-size: {1.06 * scale}rem; font-weight: 680; letter-spacing: -.015em;
   }}
   .nextstep .ns-why {{ font-size: {0.82 * scale}rem; opacity: .70; margin-top: .12rem; }}
+
+  /* ---- current / future state panels ---- */
+  .arch {{
+    border: 1px solid var(--card-br); border-radius: 14px; overflow: hidden;
+    background: var(--card-bg); height: 100%;
+  }}
+  .arch-head {{
+    font-size: {0.98 * scale}rem; font-weight: 680; letter-spacing: -.012em;
+    padding: .85rem 1.1rem .1rem 1.1rem;
+    border-top: 3px solid var(--arch-accent);
+  }}
+  .arch-sub {{
+    font-size: {0.775 * scale}rem; opacity: .66; padding: 0 1.1rem .7rem 1.1rem;
+    line-height: 1.45;
+  }}
+  .arch-row {{
+    display: flex; justify-content: space-between; align-items: baseline;
+    gap: 1rem; padding: .42rem 1.1rem;
+    border-top: 1px solid var(--card-br); font-size: {0.855 * scale}rem;
+  }}
+  .arch-row span:first-child {{ opacity: .80; }}
+  .arch-row span:last-child {{
+    font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }}
+  .arch-foot {{
+    padding: .6rem 1.1rem .8rem 1.1rem; font-size: {0.755 * scale}rem;
+    opacity: .62; line-height: 1.5; border-top: 1px solid var(--card-br);
+  }}
 
   /* ---- route cards on Start here ---- */
   .route-num {{
@@ -637,6 +667,57 @@ def donut(labels, values, title: str = "", colour_map: dict | None = None, heigh
                            sort=False))
     fig.update_layout(title=title, height=height, showlegend=False)
     return fig
+
+
+def sankey(labels: list[str], colours: list[str], source: list[int], target: list[int],
+           value: list[float], title: str = "", height: int = 520):
+    """Flow diagram, for showing an estate moving from where it is to where it lands.
+
+    Node padding is generous and link colour is taken from the source node at low
+    opacity, so a reader follows a band by eye rather than by hovering -- this is
+    drawn to be projected.
+    """
+    # Plotly does not decode named HTML entities in titles or hover templates, so
+    # they must be plain text here -- "&rarr;" renders as the literal characters.
+    link_colour = [_rgba(colours[s], 0.34) for s in source]
+    fig = go.Figure(go.Sankey(
+        arrangement="snap",
+        node=dict(label=labels, color=colours, pad=18, thickness=15,
+                  line=dict(width=0),
+                  hovertemplate="%{label}: %{value:,.0f} VMs<extra></extra>"),
+        link=dict(source=source, target=target, value=value, color=link_colour,
+                  hovertemplate="%{source.label} to %{target.label}: "
+                                "%{value:,.0f} VMs<extra></extra>"),
+        textfont=dict(size=12, color="#1E242E")))
+    fig.update_layout(title=title, height=height,
+                      font=dict(size=12.5), margin=dict(l=10, r=10, t=54, b=10))
+    return fig
+
+
+def _rgba(colour: str, alpha: float) -> str:
+    """#rrggbb to an rgba() string. Sankey links need transparency to overlap well."""
+    c = colour.lstrip("#")
+    r, g, b = (int(c[i:i + 2], 16) for i in (0, 2, 4))
+    return f"rgba({r},{g},{b},{alpha})"
+
+
+def arch_panel(title: str, subtitle: str, rows: list[tuple[str, str]],
+               accent: str = "", footer: str = "") -> str:
+    """One side of the current/future state picture: a labelled stack of layers.
+
+    Deliberately a table of real quantities rather than a drawing of boxes and
+    arrows. Every line is something the model computed; nothing here is a VNet or
+    a subnet invented to make the diagram look like an architecture.
+    """
+    accent = accent or ACCENT
+    body = "".join(
+        f"<div class='arch-row'><span>{k}</span><span>{v}</span></div>"
+        for k, v in rows)
+    foot = f"<div class='arch-foot'>{footer}</div>" if footer else ""
+    return (f"<div class='arch' style='--arch-accent:{accent}'>"
+            f"<div class='arch-head'>{title}</div>"
+            f"<div class='arch-sub'>{subtitle}</div>"
+            f"<div class='arch-body'>{body}</div>{foot}</div>")
 
 
 def df_download(df, filename: str, label: str = "Download CSV") -> None:

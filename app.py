@@ -50,7 +50,7 @@ if not auth.is_signed_in():
 # running interpreter has never seen, and Streamlit Cloud reports it as a
 # redacted AttributeError with no hint about what to do. Say what to do.
 # --------------------------------------------------------------------------
-REQUIRED_UI_API = 3
+REQUIRED_UI_API = 4
 
 if getattr(ui, "API_VERSION", 0) < REQUIRED_UI_API:
     st.error(
@@ -231,6 +231,8 @@ PAGES = {
         st.Page("views/provider.py", title="Cloud provider", icon=":material/cloud:"),
         st.Page("views/platform_options.py", title="Target platforms",
                 icon=":material/hub:"),
+        st.Page("views/future_state.py", title="Current & future state",
+                icon=":material/compare_arrows:"),
         st.Page("views/cost.py", title="Azure cost simulator", icon=":material/payments:"),
         st.Page("views/business_case.py", title="Business case",
                 icon=":material/account_balance:"),

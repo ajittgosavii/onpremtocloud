@@ -84,8 +84,25 @@ def _score_storage(r: pd.Series) -> float:
     return float(np.clip(np.log1p(tb) / np.log1p(20) * 10, 0, 10))
 
 
+def _num(value, default: float) -> float:
+    """A number, or the default when it is absent or NaN.
+
+    ``float(x) or default`` looks like it does this and does not: NaN is truthy,
+    so the NaN survives. An uploaded RVTools vInfo sheet carries no performance
+    counters, so several of these columns are entirely NaN, and a single NaN
+    factor propagates through the weighted sum to make every complexity score,
+    every effort hour and the whole programme cost NaN -- which then sums to
+    zero. Use this anywhere a column may legitimately be missing.
+    """
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return float(default) if np.isnan(out) else out
+
+
 def _score_churn(r: pd.Series) -> float:
-    churn = float(r.get("daily_churn_pct") or 3.0)
+    churn = _num(r.get("daily_churn_pct"), 3.0)
     return float(np.clip(churn / 15.0 * 10, 0, 10))
 
 
@@ -139,11 +156,11 @@ def _score_blockers(r: pd.Series) -> float:
 
 
 def _score_network(r: pd.Series) -> float:
-    nics = int(r.get("nic_count", 1))
+    nics = int(_num(r.get("nic_count"), 1))
     pts = (nics - 1) * 2.2
     if str(r.get("tier")) in ("Web", "Infrastructure"):
         pts += 1.5     # more inbound firewall/load-balancer rules to reproduce
-    if float(r.get("net_mbps") or 0) > 100:
+    if _num(r.get("net_mbps"), 0.0) > 100:
         pts += 2.0
     return float(np.clip(pts, 0, 10))
 
@@ -230,7 +247,12 @@ def score_estate(df: pd.DataFrame, model: EffortModel,
     weight_total = sum(model.weights.get(k, 0) for k in scorers)
     weighted = np.zeros(len(df))
     for key, fn in scorers.items():
-        col = df.apply(fn, axis=1).astype(float)
+        # A NaN here would propagate into complexity, effort, labour and the
+        # programme cost, and .sum() would then report the lot as zero -- a
+        # silently empty business case rather than a visible failure. The
+        # scorers handle missing columns themselves; this is the floor under
+        # them, so a future one that does not cannot take the model down.
+        col = df.apply(fn, axis=1).astype(float).fillna(0.0)
         out[f"cx_{key}"] = col
         weighted += col.values * model.weights.get(key, 0.0)
 
