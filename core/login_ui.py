@@ -225,9 +225,29 @@ def _css() -> str:
 [data-testid="stForm"] input {{
   background: transparent !important; color: var(--paper) !important;
   font-family: {brand.FONT_SANS}; font-size: .95rem !important;
-  caret-color: var(--accent);
+  caret-color: var(--accent); border-radius: 9px;
 }}
 [data-testid="stForm"] input::placeholder {{ color: rgba(232,237,247,.30) !important; }}
+/* Streamlit overlays "Press Enter to submit form" inside the focused field. The
+   submit button is directly below and full width, so the hint only adds clutter. */
+[data-testid="stForm"] [data-testid="InputInstructions"] {{ display: none !important; }}
+
+/* A password manager filling these fields makes the text invisible otherwise.
+   Chrome paints an autofilled input with its own light background and forces the
+   text colour through -webkit-text-fill-color, which outranks `color`. The only
+   way to repaint the background is a large inset shadow, and the only way to set
+   the text is the -webkit property. The absurd transition delay stops Chrome
+   animating its background back in on focus. */
+[data-testid="stForm"] input:-webkit-autofill,
+[data-testid="stForm"] input:-webkit-autofill:hover,
+[data-testid="stForm"] input:-webkit-autofill:focus,
+[data-testid="stForm"] input:-webkit-autofill:active {{
+  -webkit-text-fill-color: {brand.PAPER} !important;
+  -webkit-box-shadow: 0 0 0 1000px #0D1424 inset !important;
+  box-shadow: 0 0 0 1000px #0D1424 inset !important;
+  caret-color: var(--accent) !important;
+  transition: background-color 600000s 0s, color 600000s 0s;
+}}
 [data-testid="stForm"] button[title="Show password text"],
 [data-testid="stForm"] div[data-baseweb="input"] button {{
   color: var(--dim) !important; background: transparent !important; border: none !important;
