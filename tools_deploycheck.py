@@ -106,6 +106,61 @@ def check_cache_read_only() -> list[str]:
         pricing.CACHE_DIR = original
 
 
+def check_file_watcher_disabled() -> list[str]:
+    """The file watcher must be off, or imports race a background thread.
+
+    LocalSourcesWatcher deletes every watched module from sys.modules when any
+    source file changes. A git pull on a hosted deploy rewrites every file at
+    once, so the deletion collides with the script thread's imports and raises
+    KeyError inside importlib. This is the root cause of the crashes this file
+    exists to prevent.
+    """
+    cfg = pathlib.Path(".streamlit/config.toml")
+    if not cfg.exists():
+        return [".streamlit/config.toml is missing; the file watcher will be active"]
+    # Ignore comments, then compare with whitespace removed so any spacing works.
+    body = "".join(line.split("#", 1)[0] for line in cfg.read_text(encoding="utf-8")
+                   .splitlines()).replace(" ", "").lower()
+    if 'filewatchertype="none"' not in body:
+        return ['.streamlit/config.toml does not set fileWatcherType = "none"']
+    return []
+
+
+def check_no_import_cycles() -> list[str]:
+    """A cycle inside core/ would make the reloader race far more likely to bite."""
+    import ast
+    from collections import defaultdict
+
+    graph = defaultdict(set)
+    for path in CORE.glob("*.py"):
+        if path.name == "__init__.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"), str(path))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and node.module == "core":
+                for alias in node.names:
+                    graph[f"core.{path.stem}"].add(f"core.{alias.name}")
+            elif isinstance(node, ast.Import):
+                for alias in node.names:
+                    if alias.name.startswith("core."):
+                        graph[f"core.{path.stem}"].add(alias.name)
+
+    bad, seen = [], set()
+    def walk(node, stack):
+        if node in stack:
+            bad.append("import cycle: " + " -> ".join(stack[stack.index(node):] + [node]))
+            return
+        if node in seen:
+            return
+        seen.add(node)
+        for nxt in sorted(graph.get(node, ())):
+            walk(nxt, stack + [node])
+
+    for start in sorted(graph):
+        walk(start, [])
+    return bad
+
+
 def check_requirements_cover_imports() -> list[str]:
     """Every third-party top-level import must appear in requirements.txt."""
     req = pathlib.Path("requirements.txt").read_text(encoding="utf-8").lower()
@@ -123,8 +178,10 @@ def check_requirements_cover_imports() -> list[str]:
 
 
 CHECKS = [
+    ("file watcher disabled (the reloader race)", check_file_watcher_disabled),
     ("no `from __future__ import annotations`", check_no_future_annotations),
     ("dataclasses survive a module reload", check_dataclasses_survive_reload),
+    ("no import cycles inside core/", check_no_import_cycles),
     ("no hidden SciPy dependency", check_no_scipy),
     ("read-only filesystem degrades gracefully", check_cache_read_only),
     ("requirements.txt covers every import", check_requirements_cover_imports),

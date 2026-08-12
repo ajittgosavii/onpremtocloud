@@ -218,28 +218,46 @@ Opens on `http://localhost:8501`.
 ### Deploying to Streamlit Community Cloud
 
 Point it at `app.py`. No secrets are required -- the pricing APIs are unauthenticated and the
-OpenAI key is optional and entered at runtime.
+OpenAI key is optional and entered at runtime. Python 3.12 or later; set the version under
+**Advanced settings**.
 
-Two things that only bite on a hosted server, both now guarded by `tools_deploycheck.py`:
+**`.streamlit/config.toml` is load-bearing, not decoration.** It sets
+`fileWatcherType = "none"`, and without it the app crashes on every deploy.
 
-- **No `from __future__ import annotations` anywhere.** With it, every annotation is a string,
-  so `dataclasses` calls `_is_type()`, which does `sys.modules.get(cls.__module__).__dict__`.
-  Under a module reloader the module is not in `sys.modules`, so that returns `None` and every
-  `@dataclass` raises `AttributeError: 'NoneType' object has no attribute '__dict__'`. This is
-  not version-specific -- it reproduces on 3.12 as readily as on 3.14.
-- **No SciPy.** `pandas.corr(method="spearman")` requires it. The tornado chart computes the
-  same rank correlation as Pearson-on-ranks instead, so SciPy stays out of `requirements.txt`.
+Streamlit's `LocalSourcesWatcher` reacts to a changed source file by deleting *every* watched
+module from `sys.modules`, from a background thread. Its own source comments call this a
+workaround: "determining all import paths for a given loaded module is non-trivial, and so as a
+workaround we simply unload all watched modules." On Community Cloud a `git pull` rewrites every
+file at once, so that mass deletion races the script thread's imports. All of these are the same
+bug wearing different hats:
 
-The price cache degrades gracefully if the application directory is read-only: it falls back to
-the system temp directory, and then to no caching at all. The app still works, it just re-fetches.
+```
+KeyError: 'core.pricing'      importlib's _load_unlocked did sys.modules.pop(spec.name)
+KeyError: 'core'              ...and the parent package had been removed too
+AttributeError: 'NoneType'    dataclasses' _is_type() did
+  object has no attribute       sys.modules.get(cls.__module__).__dict__
+  '__dict__'                    on a module that had just been unloaded
+```
 
-Run the guard before pushing a deploy:
+A server never needs hot reload -- a redeploy restarts the process. For local development with
+auto-reload, override it: `streamlit run app.py --server.fileWatcherType auto`.
+
+Three further hardenings, all guarded by `tools_deploycheck.py`:
+
+- **No `from __future__ import annotations` anywhere.** With it every annotation is a string, so
+  `dataclasses` calls `_is_type()` on each one -- the second failure mode above. Removing it means
+  annotations are real objects and that branch is never reached. Not version-specific: it
+  reproduces on 3.12 as readily as on 3.14.
+- **No SciPy.** `pandas.corr(method="spearman")` requires it. The tornado chart computes the same
+  rank correlation as Pearson-on-ranks instead, keeping SciPy out of `requirements.txt`.
+- **A read-only application directory degrades, not crashes.** The price cache probes for a
+  writable location, falls back to the system temp directory, then to no caching at all.
+
+Run the guard before every deploy:
 
 ```bash
 python tools_deploycheck.py     # exit 1 on any problem
 ```
-
-Python 3.12 or later. Set the version under **Advanced settings** when you deploy.
 
 ### OpenAI (optional)
 

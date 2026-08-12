@@ -1,0 +1,33 @@
+# Streamlit configuration.
+#
+# fileWatcherType = "none" is load-bearing on any hosted deployment, not a
+# preference.
+#
+# Streamlit's LocalSourcesWatcher reacts to a changed source file by deleting
+# *every* watched module from sys.modules, from a background thread. Its own
+# comment calls this a workaround: "determining all import paths for a given
+# loaded module is non-trivial, and so as a workaround we simply unload all
+# watched modules" (streamlit/watcher/local_sources_watcher.py).
+#
+# On Streamlit Community Cloud a git pull rewrites every source file at once, so
+# that mass deletion races the script thread's imports. The symptoms are all the
+# same underlying bug:
+#
+#   KeyError: 'core.pricing'        -- importlib's _load_unlocked did
+#                                      sys.modules.pop(spec.name) and the
+#                                      watcher had already removed it
+#   KeyError: 'core'                -- the parent package was removed too
+#   AttributeError: 'NoneType' ...  -- dataclasses' _is_type() did
+#     object has no attribute          sys.modules.get(cls.__module__).__dict__
+#     '__dict__'                       on a module that had just been unloaded
+#
+# A server never needs hot reload: a redeploy restarts the process. Disabling
+# the watcher removes the race entirely.
+#
+# For local development with auto-reload, override on the command line:
+#     streamlit run app.py --server.fileWatcherType auto
+[server]
+fileWatcherType = "none"
+
+[browser]
+gatherUsageStats = false
