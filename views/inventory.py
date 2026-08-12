@@ -1,4 +1,9 @@
-"""Discovery and inventory: generate a synthetic estate or import a real one."""
+"""Discovery and inventory: import a real estate, or shape a synthetic one.
+
+Import leads and the generator sits behind an expander. Both work, but only one
+of them produces a number anybody can defend, and a page that opens on a random
+seed control reads as a toy however good the arithmetic behind it is.
+"""
 
 import numpy as np
 import pandas as pd
@@ -12,9 +17,9 @@ sc = scenario.get_scenario()
 
 ui.page_header(
     "Estate discovery",
-    "The source of truth for everything else. Either shape a synthetic estate that matches "
-    "what the client has described, or import their actual RVTools export. Every downstream "
-    "number is only as good as this page.",
+    "The source of truth for everything else. Import the client's RVTools export and every "
+    "downstream number is measured; use the demo generator instead and every downstream "
+    "number is fiction with a real price attached. This page decides which.",
 )
 
 tab_src, tab_profile, tab_browse, tab_quality = st.tabs(
@@ -22,15 +27,47 @@ tab_src, tab_profile, tab_browse, tab_quality = st.tabs(
 
 # --------------------------------------------------------------------------
 with tab_src:
-    mode = st.radio(
-        "Where does the inventory come from?",
-        ["Synthetic estate (modelled)", "Upload RVTools / CSV"],
-        index=1 if sc.use_uploaded else 0, horizontal=True)
+    st.markdown(ui.estate_badge(sc.estate_source, sc.estate_label), unsafe_allow_html=True)
 
-    if mode == "Synthetic estate (modelled)":
-        if sc.use_uploaded:
-            scenario.update(use_uploaded=False)
+    st.markdown("#### Upload an RVTools export or a CSV")
+    up = st.file_uploader("RVTools .xlsx (vInfo sheet) or a CSV", type=["xlsx", "xls", "csv"])
+    st.caption(
+        "Minimum required columns: a VM name, CPU count, memory and guest OS. RVTools "
+        "column names are recognised automatically. Performance counters, environment, "
+        "criticality and application name are all optional but sharply improve the output.")
+
+    if up is not None:
+        try:
+            if up.name.lower().endswith(".csv"):
+                raw = pd.read_csv(up)
+            else:
+                sheets = pd.read_excel(up, sheet_name=None)
+                pick = next((s for s in sheets if s.lower() in ("vinfo", "tabvinfo")),
+                            list(sheets)[0])
+                raw = sheets[pick]
+                st.caption(f"Read sheet: **{pick}** ({len(raw):,} rows).")
+            df, warns = inventory.import_inventory(raw)
+            st.session_state["uploaded_estate"] = df
+            scenario.update(use_uploaded=True, estate_source="upload", estate_label=up.name)
+            st.success(f"Imported {len(df):,} VMs.")
+            for w in warns:
+                ui.note(w, "warn")
             st.rerun()
+        except Exception as exc:
+            st.error(f"Could not import that file: {exc}")
+
+    if sc.estate_source == "upload" and st.session_state.get("uploaded_estate") is not None:
+        st.info(f"Using an uploaded inventory of "
+                f"{len(st.session_state['uploaded_estate']):,} VMs.")
+
+    # ---- demo data, deliberately behind a door --------------------------
+    st.divider()
+    with st.expander("Demo data -- synthetic estate generator", expanded=False):
+        ui.note(
+            "Everything produced from here is <b>fiction with a real price attached</b>. "
+            "The arithmetic and the Azure rates are genuine; the estate is invented. Use it "
+            "to demonstrate the model or to rehearse a session, never to quote a client.",
+            "warn")
 
         c1, c2, c3 = st.columns(3)
         n_vms = c1.number_input("Number of VMs", 10, 20000, sc.n_vms, step=1)
@@ -46,53 +83,22 @@ with tab_src:
                                help="Same seed, same estate. Change it to test whether a "
                                     "conclusion is robust or an artefact of one sample.")
 
-        if (n_vms != sc.n_vms or win != sc.windows_pct or clusters != sc.n_clusters
-                or bias != sc.overprovision_bias or seed != sc.seed):
+        # An explicit button, not auto-apply: nudging a slider must never silently
+        # replace a client's uploaded inventory with a generated one.
+        if st.button("Generate this estate and use it", width="stretch"):
+            st.session_state["uploaded_estate"] = None
             scenario.update(n_vms=int(n_vms), windows_pct=float(win), n_clusters=int(clusters),
-                            overprovision_bias=float(bias), seed=int(seed), use_uploaded=False)
+                            overprovision_bias=float(bias), seed=int(seed),
+                            use_uploaded=False, estate_source="reference",
+                            estate_label=f"{int(n_vms):,}-VM synthetic estate")
             st.rerun()
 
-        ui.note(
+        st.caption(
             "The generator produces the statistical shape of a real aged vSphere farm: heavy "
             "over-provisioning, a long tail of idle VMs, end-of-life guest operating systems, "
-            "and a realistic scattering of the conditions that actually block migration - RDMs, "
-            "shared disks, stale VMware Tools, open snapshots, vGPU and MAC-bound licences.")
-
-    else:
-        st.markdown("#### Upload an RVTools export or a CSV")
-        up = st.file_uploader("RVTools .xlsx (vInfo sheet) or a CSV", type=["xlsx", "xls", "csv"])
-        st.caption(
-            "Minimum required columns: a VM name, CPU count, memory and guest OS. RVTools "
-            "column names are recognised automatically. Performance counters, environment, "
-            "criticality and application name are all optional but sharply improve the output.")
-
-        if up is not None:
-            try:
-                if up.name.lower().endswith(".csv"):
-                    raw = pd.read_csv(up)
-                else:
-                    sheets = pd.read_excel(up, sheet_name=None)
-                    pick = next((s for s in sheets if s.lower() in ("vinfo", "tabvinfo")),
-                                list(sheets)[0])
-                    raw = sheets[pick]
-                    st.caption(f"Read sheet: **{pick}** ({len(raw):,} rows).")
-                df, warns = inventory.import_inventory(raw)
-                st.session_state["uploaded_estate"] = df
-                scenario.update(use_uploaded=True)
-                st.success(f"Imported {len(df):,} VMs.")
-                for w in warns:
-                    ui.note(w, "warn")
-                st.rerun()
-            except Exception as exc:
-                st.error(f"Could not import that file: {exc}")
-
-        if st.session_state.get("uploaded_estate") is not None:
-            cur = st.session_state["uploaded_estate"]
-            st.info(f"Currently using an uploaded inventory of {len(cur):,} VMs.")
-            if st.button("Discard the upload and go back to the synthetic estate"):
-                st.session_state["uploaded_estate"] = None
-                scenario.update(use_uploaded=False)
-                st.rerun()
+            "and a realistic scattering of the conditions that actually block migration -- "
+            "RDMs, shared disks, stale VMware Tools, open snapshots, vGPU and MAC-bound "
+            "licences.")
 
 res = scenario.current()
 est = res.estate

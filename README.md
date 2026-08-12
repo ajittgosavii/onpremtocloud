@@ -202,6 +202,40 @@ Windows $0.3760/hr; P30 $135.17/mo; E30 $76.80/mo; S30 $40.96/mo; 3-year RI $0.0
 
 ---
 
+## Where the estate comes from
+
+Only the **Azure and AWS unit prices** are fetched from outside the application. Everything
+else is computed from an estate, and a reader cannot tell a real estate from a modelled one
+by looking at the output. So the application refuses to show an answer until somebody has
+said which it is.
+
+**Start here** is the landing page until a source is chosen, and offers three routes:
+
+| Route | Estate is | Use it for |
+|---|---|---|
+| **Upload an RVTools export or CSV** | Measured | Anything you will quote to a client |
+| **Enter the headline numbers** | Your totals, modelled distribution | Early sizing with no export to hand |
+| **Reference estate** | Invented | Demonstrations and training only |
+
+Every page then carries a badge naming the source, and the executive briefing carries a
+standing warning while the estate is synthetic. The synthetic generator still exists on
+**Estate discovery**, but behind an expander marked *Demo data*, with an explicit button
+rather than live sliders -- nudging a control must never silently replace a client's
+uploaded inventory.
+
+`data/sample_rvtools_300vm.xlsx` is a 300-VM vInfo sheet in RVTools' own format, for
+checking the importer before handling a real one. Regenerate it with
+`py -3.12 tools_make_sample.py`, which also runs the full pipeline over its own output and
+fails if the programme cost or schedule come back empty.
+
+**A vInfo-only upload is not enough for a full answer.** RVTools `vInfo` carries no
+performance counters, application name, environment or database engine, so right-sizing
+falls back to as-provisioned and the disposition engine rehosts everything rather than
+identifying PaaS candidates. The application says so where it matters rather than
+presenting the gap as a finding.
+
+---
+
 ## Install and run
 
 ```bash

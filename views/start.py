@@ -11,6 +11,8 @@ inventory, the client's own headline numbers, or the reference estate clearly
 labelled as synthetic.
 """
 
+import pathlib
+
 import pandas as pd
 import streamlit as st
 
@@ -89,6 +91,17 @@ with r1:
             except Exception as exc:
                 st.error(f"Could not read that file: {exc}")
 
+        sample = pathlib.Path("data/sample_rvtools_300vm.xlsx")
+        if sample.exists():
+            st.download_button(
+                "Download a 300-VM sample export",
+                sample.read_bytes(), file_name=sample.name,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                width="stretch",
+                help="A synthetic vInfo sheet in RVTools' own format, for checking the "
+                     "importer against a file of the right shape before you handle a "
+                     "client's.")
+
 # ---- 2. headline numbers --------------------------------------------------
 with r2:
     with st.container(border=True):
@@ -135,10 +148,10 @@ with r3:
     with st.container(border=True):
         st.markdown(
             "<div class='route-num'>3</div>"
-            "<div class='route-title'>Explore the reference estate</div>"
-            "<div class='route-body'>547 synthetic VMs, 60% Windows, built to behave like "
-            "an aged vSphere farm. For demonstrations, training and seeing what the model "
-            "does before pointing it at anything real.</div>",
+            "<div class='route-title'>Demo data &mdash; reference estate</div>"
+            "<div class='route-body'>547 synthetic VMs that behave like an aged vSphere "
+            "farm. Fiction with a real price attached: the arithmetic and the Azure rates "
+            "are genuine, the estate is invented. For demonstrations and training.</div>",
             unsafe_allow_html=True)
         st.caption("Every page will carry a label saying the estate is synthetic. You can "
                    "swap it for a real inventory at any point without losing your settings.")
