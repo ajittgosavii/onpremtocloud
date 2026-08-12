@@ -55,6 +55,10 @@ class OnPremProfile:
     downtime_cost_per_hour: float = 22000.0
     # Year-on-year inflation of the current-state estate.
     onprem_cost_escalation_pct: float = 4.5
+    # Uniform multiplier on every line of the breakdown. Set by
+    # scale_onprem_to_annual() when somebody knows their total current-state
+    # spend but not how it splits. 1.0 means the modelled lines stand as they are.
+    cost_scale: float = 1.0
 
 
 @dataclass
@@ -125,8 +129,27 @@ def onprem_annual_breakdown(p: OnPremProfile) -> pd.DataFrame:
     ]
     df = pd.DataFrame(rows, columns=["component", "annual_cost", "basis"])
     df = df[df["annual_cost"] > 0].copy()
+    if p.cost_scale != 1.0:
+        df["annual_cost"] = df["annual_cost"] * p.cost_scale
     df["share_pct"] = df["annual_cost"] / df["annual_cost"].sum() * 100
     return df.sort_values("annual_cost", ascending=False)
+
+
+def scale_onprem_to_annual(p: OnPremProfile, target_annual: float) -> OnPremProfile:
+    """Match a known total current-state spend, keeping the modelled mix.
+
+    Somebody who knows they spend 2.4m a year running the VMware platform, but
+    not how that divides between licensing, hardware, power and people, gets
+    their own total with this model's proportions rather than this model's
+    total. The split stays an assumption, and the Model & assumptions page
+    continues to say so.
+    """
+    from dataclasses import replace
+    base = replace(p, cost_scale=1.0)
+    current = float(onprem_annual_breakdown(base)["annual_cost"].sum())
+    if current <= 0 or target_annual <= 0:
+        return p
+    return replace(p, cost_scale=float(target_annual) / current)
 
 
 def azure_annual_breakdown(a: AzureProfile) -> pd.DataFrame:

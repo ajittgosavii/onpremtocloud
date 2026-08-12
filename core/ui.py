@@ -16,7 +16,7 @@ import streamlit as st
 # the file watcher disabled, a hosted redeploy re-executes the pages from disk
 # but keeps the already-imported core modules, so new page code can meet an old
 # core.ui until the process restarts.
-API_VERSION = 2
+API_VERSION = 3
 
 # --------------------------------------------------------------------------
 # Palette
@@ -51,6 +51,7 @@ BAND_COLOURS = {"Simple": "#2F9E68", "Moderate": "#E08A2E",
 # --------------------------------------------------------------------------
 NARRATIVE: list[tuple[str, str, str]] = [
     # (act, page title, one-line purpose used as the eyebrow)
+    ("Start", "Start here", "Whose estate are we modelling"),
     ("Situation", "Executive briefing", "The answer, up front"),
     ("Situation", "Model & assumptions", "What we are assuming, and where to change it"),
     ("Discover", "Estate discovery", "What you actually have"),
@@ -67,7 +68,27 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Communicate", "AI advisor", "Turning this into deliverables"),
 ]
 _STEP_INDEX = {title: i for i, (_, title, _) in enumerate(NARRATIVE)}
-ACTS = ["Situation", "Discover", "Assess", "Decide", "Plan", "Execute", "Communicate"]
+ACTS = ["Start", "Situation", "Discover", "Assess", "Decide", "Plan", "Execute",
+        "Communicate"]
+
+# Which page each act hands over to, for the "next step" footer.
+_PAGE_PATHS = {
+    "Start here": "views/start.py",
+    "Executive briefing": "views/overview.py",
+    "Model & assumptions": "views/assumptions.py",
+    "Estate discovery": "views/inventory.py",
+    "Readiness & 7R": "views/assess.py",
+    "Complexity & effort": "views/effort.py",
+    "Cloud provider": "views/provider.py",
+    "Target platforms": "views/platform_options.py",
+    "Azure cost simulator": "views/cost.py",
+    "Business case": "views/business_case.py",
+    "Wave plan & timeline": "views/plan.py",
+    "Risk simulation": "views/simulate.py",
+    "Azure Migrate simulator": "views/azure_migrate.py",
+    "Migration tooling": "views/tooling.py",
+    "AI advisor": "views/advisor.py",
+}
 
 
 def presenting() -> bool:
@@ -278,6 +299,34 @@ def _css(present: bool) -> str:
   .side-kpi span:first-child {{ opacity: .70; }}
   .side-kpi span:last-child {{ font-weight: 700; font-variant-numeric: tabular-nums; }}
 
+  /* ---- next-step footer ---- */
+  /* Streamlit wraps every element in its own container, so the page link that
+     follows cannot be styled as part of this plate by sibling selector. It sits
+     directly beneath instead, which reads fine and does not depend on the DOM. */
+  .nextstep {{
+    margin: 2.6rem 0 .5rem 0; padding: 1.0rem 1.2rem;
+    border-radius: 14px; border: 1px solid var(--card-br);
+    background: linear-gradient(96deg, rgba(59,111,212,.085), rgba(122,91,196,.05));
+  }}
+  .nextstep .ns-label {{
+    font-size: .66rem; font-weight: 750; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: .25rem;
+  }}
+  .nextstep .ns-title {{
+    font-size: {1.06 * scale}rem; font-weight: 680; letter-spacing: -.015em;
+  }}
+  .nextstep .ns-why {{ font-size: {0.82 * scale}rem; opacity: .70; margin-top: .12rem; }}
+
+  /* ---- route cards on Start here ---- */
+  .route-num {{
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 8px; margin-bottom: .5rem;
+    background: linear-gradient(96deg, var(--accent), var(--accent-2));
+    color: #fff; font-size: .78rem; font-weight: 700;
+  }}
+  .route-title {{ font-size: {1.02 * scale}rem; font-weight: 680; margin-bottom: .2rem; }}
+  .route-body {{ font-size: {0.85 * scale}rem; opacity: .74; line-height: 1.55; }}
+
   /* ---- signed-in account block ---- */
   .acct {{ display: flex; align-items: center; gap: .6rem; margin-bottom: .55rem; }}
   .acct-mark {{
@@ -393,6 +442,53 @@ def page_link(path: str, label: str, icon: str = "", container=None) -> None:
         target.page_link(path, label=label, icon=icon or None)
     except Exception:
         target.caption(f"-> {label}")
+
+
+def estate_badge(source: str, label: str = "", vm_count: int | None = None) -> str:
+    """Say where the estate came from, everywhere a number derived from it appears.
+
+    Only the Azure unit prices in this application come from outside it. The
+    estate can be a client's own inventory or a synthetic one, and a reader has
+    no way to tell from the figures. So the figures carry a label.
+    """
+    n = f"{vm_count:,} VMs" if vm_count else ""
+    if source == "upload":
+        text = f"Your inventory{': ' + label if label else ''}"
+        cls = "pill-live"
+    elif source == "manual":
+        text = "Sized from your figures"
+        cls = "pill-live"
+    elif source == "reference":
+        text = "Reference estate &mdash; synthetic"
+        cls = "pill-cache"
+    else:
+        text = "No estate chosen"
+        cls = "pill-off"
+    return f"<span class='pill {cls}'>{text}{' &middot; ' + n if n else ''}</span>"
+
+
+def next_step(current_title: str, container=None) -> None:
+    """Footer that names the next page in the narrative and links to it.
+
+    Rendered centrally from app.py for every page, so a reader is never left on a
+    screen wondering which tab comes next. The order is NARRATIVE, which is the
+    same order the stepper draws, so the two can never disagree.
+    """
+    idx = _STEP_INDEX.get(current_title)
+    if idx is None or idx + 1 >= len(NARRATIVE):
+        return
+    act, title, purpose = NARRATIVE[idx + 1]
+    path = _PAGE_PATHS.get(title)
+    if not path:
+        return
+    target = container if container is not None else st
+    target.markdown(
+        "<div class='nextstep'><div class='ns-label'>Next</div>"
+        f"<div class='ns-title'>{title}</div>"
+        f"<div class='ns-why'>{act} &middot; {purpose}</div></div>",
+        unsafe_allow_html=True)
+    # "Continue" rather than the page name, which the card states directly above.
+    page_link(path, "Continue", icon=":material/arrow_forward:", container=target)
 
 
 def takeaway(text: str, label: str = "The point to make") -> None:

@@ -403,6 +403,43 @@ def _guess_eol(os_name: str) -> bool:
     return any(tok.strip() in o for tok in _EOL_TOKENS)
 
 
+def scale_estate_to_totals(df: pd.DataFrame,
+                           total_vcpu: float | None = None,
+                           total_ram_gib: float | None = None,
+                           provisioned_tib: float | None = None) -> pd.DataFrame:
+    """Stretch a generated estate onto measured totals, keeping its shape.
+
+    For the case where somebody knows their estate's headline numbers but has no
+    RVTools export to hand. The generator supplies the *distribution* -- the long
+    tail of idle VMs, the over-provisioning, the OS mix -- and this rescales it so
+    the totals are the client's own. Every per-VM figure stays proportionate, so
+    right-sizing and complexity still behave.
+
+    Ratios are preserved within a group: storage scales os disk, data disk,
+    provisioned and used together, so used/provisioned does not drift. Rounding
+    to whole vCPU and GiB leaves the achieved totals a fraction off the targets;
+    the caller shows what was actually achieved rather than what was asked for.
+    """
+    out = df.copy()
+
+    if total_vcpu and out["vcpu"].sum() > 0:
+        factor = float(total_vcpu) / float(out["vcpu"].sum())
+        out["vcpu"] = (out["vcpu"] * factor).round().clip(lower=1).astype(int)
+        out["allocated_vcpu_hours_month"] = out["vcpu"] * 730
+
+    if total_ram_gib and out["ram_gib"].sum() > 0:
+        factor = float(total_ram_gib) / float(out["ram_gib"].sum())
+        out["ram_gib"] = (out["ram_gib"] * factor).round().clip(lower=1).astype(int)
+
+    if provisioned_tib and out["provisioned_gib"].sum() > 0:
+        factor = float(provisioned_tib) * 1024.0 / float(out["provisioned_gib"].sum())
+        for col in ("os_disk_gib", "data_disk_gib", "provisioned_gib", "used_gib"):
+            if col in out.columns:
+                out[col] = (out[col] * factor).round(1).clip(lower=1.0)
+
+    return out
+
+
 def estate_summary(df: pd.DataFrame) -> dict:
     """Headline numbers for the executive dashboard."""
     return {

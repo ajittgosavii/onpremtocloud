@@ -22,11 +22,20 @@ ui.page_header(
 for w in res.warnings:
     ui.note(w, "warn")
 
-st.markdown(ui.pricing_badge(res.price_book.source)
+st.markdown(ui.estate_badge(sc.estate_source, sc.estate_label,
+                            res.estate_summary["vm_count"])
+            + ui.pricing_badge(res.price_book.source)
             + f"<span class='pill'>{sc.commercial.region}</span>"
             + f"<span class='pill'>{cur}</span>"
             + f"<span class='pill'>{res.cost_summary['priced_from_api_pct']:.0f}% of VMs "
               "priced from the live API</span>", unsafe_allow_html=True)
+
+if sc.estate_source == "reference":
+    ui.note(
+        "These figures are computed from the <b>547-VM reference estate</b>, which is "
+        "synthetic. The arithmetic and the Azure prices are real; the estate is not. "
+        "Replace it on <b>Start here</b> before presenting any of this as a client's "
+        "numbers.", "warn")
 
 # --------------------------------------------------------------------------
 cs, es, ts, ss = res.cost_summary, res.effort_summary, res.tco_summary, res.schedule_summary

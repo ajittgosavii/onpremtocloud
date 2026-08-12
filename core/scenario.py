@@ -24,6 +24,11 @@ class Scenario:
     n_clusters: int = 9
     overprovision_bias: float = 1.0
     use_uploaded: bool = False
+    # Where the estate came from, so no page can show a synthetic figure without
+    # saying it is one. "" means nobody has chosen yet and Start here is the
+    # landing page. Otherwise: reference | upload | manual.
+    estate_source: str = ""
+    estate_label: str = ""
 
     # Sizing
     sizing: rightsizing.SizingPolicy = field(default_factory=rightsizing.SizingPolicy)

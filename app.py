@@ -50,7 +50,7 @@ if not auth.is_signed_in():
 # running interpreter has never seen, and Streamlit Cloud reports it as a
 # redacted AttributeError with no hint about what to do. Say what to do.
 # --------------------------------------------------------------------------
-REQUIRED_UI_API = 2
+REQUIRED_UI_API = 3
 
 if getattr(ui, "API_VERSION", 0) < REQUIRED_UI_API:
     st.error(
@@ -115,28 +115,39 @@ def sidebar() -> None:
             st.rerun()
 
         # ---- live scenario readout ---------------------------------------
-        try:
-            res = scenario.current()
-            cs, es, ss, ts = (res.cost_summary, res.effort_summary,
-                              res.schedule_summary, res.tco_summary)
-            st.markdown("<div style='margin:.9rem 0 .35rem 0;font-size:.70rem;"
-                        "font-weight:700;letter-spacing:.1em;text-transform:uppercase;"
-                        "opacity:.62'>Scenario at a glance</div>",
+        # Suppressed until an estate has been chosen: a running total computed
+        # from an estate nobody picked is the thing Start here exists to prevent.
+        if not sc.estate_source:
+            st.markdown("<div style='margin:.9rem 0 .35rem 0'></div>",
                         unsafe_allow_html=True)
-            ui.sidebar_kpis([
-                ("VMs in scope", f"{res.estate_summary['vm_count']:,}"),
-                ("Azure run rate",
-                 f"{ui.compact_money(cs['monthly_total'], currency)}/mo"),
-                ("On-premises today",
-                 f"{ui.compact_money(res.onprem_monthly, currency)}/mo"),
-                ("Programme cost", ui.compact_money(es["migration_cost"], currency)),
-                ("Duration", f"{ss.get('elapsed_months', 0):.1f} mo"),
-                ("Payback",
-                 f"{ts['payback_years']:.1f} yr" if ts["payback_years"] else "beyond horizon"),
-            ])
-            st.markdown(ui.pricing_badge(res.price_book.source), unsafe_allow_html=True)
-        except Exception:
-            st.caption("Scenario summary unavailable until the first page loads.")
+            st.markdown(ui.estate_badge(""), unsafe_allow_html=True)
+            st.caption("Choose an estate on **Start here** and the model fills in.")
+        else:
+            try:
+                res = scenario.current()
+                cs, es, ss, ts = (res.cost_summary, res.effort_summary,
+                                  res.schedule_summary, res.tco_summary)
+                st.markdown("<div style='margin:.9rem 0 .35rem 0;font-size:.70rem;"
+                            "font-weight:700;letter-spacing:.1em;text-transform:uppercase;"
+                            "opacity:.62'>Scenario at a glance</div>",
+                            unsafe_allow_html=True)
+                ui.sidebar_kpis([
+                    ("VMs in scope", f"{res.estate_summary['vm_count']:,}"),
+                    ("Azure run rate",
+                     f"{ui.compact_money(cs['monthly_total'], currency)}/mo"),
+                    ("On-premises today",
+                     f"{ui.compact_money(res.onprem_monthly, currency)}/mo"),
+                    ("Programme cost", ui.compact_money(es["migration_cost"], currency)),
+                    ("Duration", f"{ss.get('elapsed_months', 0):.1f} mo"),
+                    ("Payback",
+                     f"{ts['payback_years']:.1f} yr" if ts["payback_years"]
+                     else "beyond horizon"),
+                ])
+                st.markdown(
+                    ui.estate_badge(sc.estate_source, sc.estate_label)
+                    + ui.pricing_badge(res.price_book.source), unsafe_allow_html=True)
+            except Exception:
+                st.caption("Scenario summary unavailable until the first page loads.")
 
         if not present:
             with st.expander("Pricing feed", expanded=False):
@@ -192,10 +203,19 @@ sidebar()
 # --------------------------------------------------------------------------
 # Navigation, grouped into the seven acts of the client narrative
 # --------------------------------------------------------------------------
+# Until somebody has said where the estate comes from, Start here is the landing
+# page: an executive briefing computed from an estate nobody chose is the most
+# misleading screen this application can show.
+_chosen = bool(scenario.get_scenario().estate_source)
+
 PAGES = {
+    "0 - Start": [
+        st.Page("views/start.py", title="Start here",
+                icon=":material/play_circle:", default=not _chosen),
+    ],
     "1 - Situation": [
         st.Page("views/overview.py", title="Executive briefing",
-                icon=":material/insights:", default=True),
+                icon=":material/insights:", default=_chosen),
         st.Page("views/assumptions.py", title="Model & assumptions",
                 icon=":material/rule_settings:"),
     ],
@@ -232,3 +252,7 @@ PAGES = {
 
 nav = st.navigation(PAGES, expanded=True)
 nav.run()
+
+# Wayfinding for every page from one place: the order lives in ui.NARRATIVE, so
+# the footer and the stepper cannot drift apart, and no view needs editing.
+ui.next_step(nav.title)

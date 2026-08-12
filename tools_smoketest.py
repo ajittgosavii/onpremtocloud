@@ -10,6 +10,7 @@ import time
 from streamlit.testing.v1 import AppTest
 
 PAGES = [
+    "views/start.py",
     "views/overview.py",
     "views/assumptions.py",
     "views/inventory.py",
