@@ -1,0 +1,288 @@
+"""Target platform alternatives, including the on-premises Azure options."""
+
+from __future__ import annotations
+
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+
+from core import platforms, scenario, tco, ui
+
+sc = scenario.get_scenario()
+res = scenario.current()
+cur = sc.commercial.currency
+s = res.estate_summary
+
+ui.page_header(
+    "Target platforms",
+    "Azure public cloud is one destination among several, and a business case that has not "
+    "been tested against the alternatives is not a business case. This includes the "
+    "on-premises Azure options - Azure Local and Azure Stack Hub - which answer the residency "
+    "objection without giving up cloud tooling, and the non-VMware hypervisors that solve the "
+    "licensing problem without leaving the data centre.",
+)
+
+ui.takeaway(
+    "Change the priority selector live, in front of the client, and let them watch the ranking "
+    "move. It converts \"why Azure?\" from an assertion into a decision they made themselves. "
+    "Two answers usually surprise people: <b>Azure VMware Solution</b> is the fastest exit and "
+    "rarely the cheapest destination, and <b>Azure Local</b> removes the Broadcom licence "
+    "entirely without the workload ever leaving the building.")
+
+tab_rank, tab_cost, tab_local, tab_detail = st.tabs(
+    ["Decision matrix", "Cost comparison", "Azure Local deep dive", "All options"])
+
+# --------------------------------------------------------------------------
+with tab_rank:
+    c1, c2 = st.columns([1, 2])
+    priority = c1.selectbox("What matters most to this client?", platforms.PRIORITIES)
+    custom = c2.toggle("Set my own criteria weights", False)
+
+    weights = None
+    if custom:
+        weights = {}
+        keys = list(platforms.CRITERIA)
+        for chunk in [keys[i:i + 4] for i in range(0, len(keys), 4)]:
+            cols = st.columns(len(chunk))
+            for col, k in zip(cols, chunk):
+                weights[k] = col.slider(platforms.CRITERIA[k], 0.0, 3.0, 1.0, 0.1,
+                                        key=f"pw_{k}")
+
+    ranked = platforms.rank_platforms(priority, weights)
+
+    fig = go.Figure(go.Bar(
+        x=ranked["fit_score"], y=ranked["platform"], orientation="h",
+        marker_color=[ui.PALETTE[2] if i == 0 else
+                      (ui.PALETTE[0] if i < 3 else ui.PALETTE[7])
+                      for i in range(len(ranked))],
+        text=[f"{v:.0f}" for v in ranked["fit_score"]], textposition="auto"))
+    fig.update_layout(height=520, title=f"Platform fit for: {priority}",
+                      xaxis_title="Weighted fit score (0-100)",
+                      yaxis=dict(autorange="reversed"))
+    st.plotly_chart(fig, width="stretch")
+
+    top = ranked.iloc[0]
+    ui.note(f"<b>Best fit: {top['platform']}</b> -- {top['summary']}<br><br>"
+            f"<i>Best when:</i> {top['best_when']}")
+
+    st.markdown("### How they score across every criterion")
+    heat = ranked.set_index("platform")[list(platforms.CRITERIA)]
+    heat.columns = [platforms.CRITERIA[c] for c in heat.columns]
+    fig = px.imshow(heat, color_continuous_scale=ui.SEQUENTIAL, aspect="auto",
+                    labels=dict(color="Score 1-5"), text_auto=True)
+    fig.update_layout(height=560, xaxis_title="", yaxis_title="",
+                      xaxis=dict(side="top", tickangle=-40))
+    st.plotly_chart(fig, width="stretch")
+    st.caption("Scores are 1-5 and deliberately opinionated. Each is defensible from the "
+               "trade-offs listed on the All options tab - they are a starting point for a "
+               "client conversation, not vendor marketing numbers.")
+
+# --------------------------------------------------------------------------
+with tab_cost:
+    st.markdown("### Sizing the alternatives against this estate")
+
+    c1, c2, c3, c4 = st.columns(4)
+    avs_node = c1.selectbox("AVS node type", list(platforms.AVS_NODES), index=0)
+    vcpu_ratio = c2.slider("vCPU per physical core", 1.0, 12.0, 4.0, 0.5,
+                           help="The consolidation ratio the current estate actually achieves.")
+    vcf_rate = c3.number_input("VCF subscription per core/year", 0.0, 600.0, 135.0, 5.0,
+                               help="Since November 2025 new AVS nodes require a portable VCF "
+                                    "subscription bought separately from Broadcom.")
+    node_capex = c4.number_input("Azure Local node capex", 10000.0, 200000.0, 46000.0, 1000.0)
+
+    al_inputs = platforms.AzureLocalInputs(
+        total_vcpu=s["total_vcpu"], total_ram_gib=s["total_ram_tib"] * 1024,
+        provisioned_tib=s["provisioned_tib"], vcpu_per_physical_core=vcpu_ratio,
+        node_capex=node_capex,
+        apply_hybrid_benefit=sc.commercial.apply_ahb_windows,
+        windows_share_pct=s["windows_pct"])
+    al = platforms.azure_local_cost(al_inputs)
+
+    avs = platforms.size_avs(s["total_vcpu"], s["total_ram_tib"] * 1024, s["used_tib"],
+                             node=avs_node, vcpu_per_core=vcpu_ratio)
+
+    cmp = platforms.platform_cost_comparison(
+        res.cost_summary["monthly_total"], res.onprem_monthly, al, avs,
+        vcf_per_core_year=vcf_rate)
+
+    fig = go.Figure(go.Bar(
+        x=cmp["monthly_cost"], y=cmp["platform"], orientation="h",
+        marker_color=[ui.PALETTE[2] if v < res.onprem_monthly else ui.PALETTE[3]
+                      for v in cmp["monthly_cost"]],
+        text=[f"{ui.compact_money(v, cur)}/mo   ({d:+.0f}%)"
+              for v, d in zip(cmp["monthly_cost"], cmp["vs_stay_pct"])],
+        textposition="auto"))
+    fig.update_layout(height=330, title="Monthly run rate by destination",
+                      xaxis_title=f"{cur}/month", yaxis=dict(autorange="reversed"))
+    st.plotly_chart(fig, width="stretch")
+
+    disp = cmp.copy()
+    disp["monthly_cost"] = disp["monthly_cost"].map(lambda v: ui.money(v, cur))
+    disp["annual_cost"] = disp["annual_cost"].map(lambda v: ui.money(v, cur))
+    disp["vs_stay_pct"] = disp["vs_stay_pct"].map(lambda v: f"{v:+.1f}%")
+    st.dataframe(disp.rename(columns={
+        "platform": "Destination", "monthly_cost": "Monthly", "annual_cost": "Annual",
+        "vs_stay_pct": "vs staying on VMware", "basis": "How it is sized"}),
+        hide_index=True, width="stretch",
+        column_config={"How it is sized": st.column_config.TextColumn(width="large")})
+
+    ui.metric_row([
+        ("AVS hosts required", f"{avs['hosts']} x {avs['node']}",
+         f"bound by {avs['binding_constraint'].lower()}"),
+        ("Azure Local nodes", f"{al['nodes']}", f"{al['physical_cores']:,} physical cores"),
+        ("Current VMware hosts", f"{res.onprem.hosts}", None),
+        ("AVS three-host minimum",
+         "not binding" if avs["hosts"] > 3 else "binding", None),
+    ])
+
+    if avs["hosts"] > 6:
+        avs_cost = cmp.loc[cmp["platform"] == "Azure VMware Solution", "monthly_cost"].iloc[0]
+        ui.note(
+            f"<b>Azure VMware Solution needs {avs['hosts']} hosts for this estate, bound by "
+            f"{avs['binding_constraint'].lower()}.</b> AVS is dedicated hardware sold by "
+            "capacity, not consumption, so the whole estate's memory footprint has to be "
+            f"bought whether it is used or not. At {ui.compact_money(avs_cost, cur)} per month "
+            "plus a separately-purchased VCF subscription, AVS is the fastest exit and rarely "
+            "the cheapest destination. Treat it as a staging platform with a dated exit plan, "
+            "not an endpoint.", "warn")
+
+    st.markdown("### AVS sizing detail")
+    st.dataframe(pd.DataFrame([
+        {"Constraint": "CPU", "Hosts needed": f"{avs['by_cpu']:.1f}",
+         "Basis": f"{s['total_vcpu']:,} vCPU at {vcpu_ratio:g}:1 on "
+                  f"{avs['spec']['cores']} cores/host"},
+        {"Constraint": "Memory", "Hosts needed": f"{avs['by_ram']:.1f}",
+         "Basis": f"{s['total_ram_tib']:.1f} TiB at 80% utilisation on "
+                  f"{avs['spec']['ram_gib']} GiB/host"},
+        {"Constraint": "vSAN capacity", "Hosts needed": f"{avs['by_storage']:.1f}",
+         "Basis": f"{s['used_tib']:.1f} TiB x {platforms.AVS_STORAGE_SLACK} overhead on "
+                  f"{avs['spec']['nvme_tib']} TiB/host"},
+    ]), hide_index=True, width="stretch")
+
+# --------------------------------------------------------------------------
+with tab_local:
+    st.markdown("### Azure Local -- Azure in your own data centre")
+    ui.note(
+        "Azure Local (formerly Azure Stack HCI) is the closest Azure equivalent to AWS "
+        "Outposts, and the most direct like-for-like replacement for vSphere on-premises. "
+        "It runs Microsoft's own stack on validated hardware in your building, managed through "
+        "the Azure portal via Arc, and it removes the Broadcom licence entirely - without the "
+        "workload ever leaving the site.")
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    cores_node = c1.number_input("Physical cores per node", 16, 128, 48, 4,
+                                 key="al_cores")
+    ram_node = c2.number_input("RAM per node (GiB)", 128.0, 6144.0, 1024.0, 128.0,
+                               key="al_ram")
+    node_capex_local = c3.number_input("Node capex", 10000.0, 200000.0, 46000.0, 1000.0,
+                                       key="al_capex")
+    ext_san = c4.toggle("External SAN storage", False,
+                        help="External SAN support raises the service fee from $10.00 to "
+                             "$20.10 per physical core per month.")
+    ahb = c5.toggle("Apply Azure Hybrid Benefit", sc.commercial.apply_ahb_windows,
+                    help="Without it, Windows Server guest rights are charged at $23.30 per "
+                         "physical core per month for unlimited guest VMs.")
+
+    al2 = platforms.azure_local_cost(platforms.AzureLocalInputs(
+        total_vcpu=s["total_vcpu"], total_ram_gib=s["total_ram_tib"] * 1024,
+        provisioned_tib=s["provisioned_tib"], cores_per_node=int(cores_node),
+        ram_gib_per_node=float(ram_node), external_san=ext_san,
+        apply_hybrid_benefit=ahb, windows_share_pct=s["windows_pct"],
+        node_capex=float(node_capex_local)))
+
+    ui.metric_row([
+        ("Nodes required", f"{al2['nodes']}", f"{al2['physical_cores']:,} physical cores"),
+        ("Annual cost", ui.compact_money(al2["annual_total"], cur), None),
+        ("Monthly cost", ui.compact_money(al2["monthly_total"], cur), None),
+        ("vs staying on VMware",
+         f"{(al2['monthly_total'] - res.onprem_monthly) / res.onprem_monthly * 100:+.0f}%",
+         None),
+        ("vs Azure public cloud",
+         f"{(al2['monthly_total'] - res.cost_summary['monthly_total']) / max(res.cost_summary['monthly_total'], 1) * 100:+.0f}%",
+         None),
+    ])
+
+    c1, c2 = st.columns([1.3, 1])
+    with c1:
+        bd = al2["breakdown"]
+        fig = go.Figure(go.Bar(
+            x=bd["annual_cost"], y=bd["component"], orientation="h",
+            marker_color=ui.PALETTE[0],
+            text=[f"{ui.compact_money(v, cur)} ({p:.0f}%)"
+                  for v, p in zip(bd["annual_cost"], bd["share_pct"])],
+            textposition="auto"))
+        fig.update_layout(height=340, title="Azure Local annual cost breakdown",
+                          xaxis_title=f"{cur}/year", yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, width="stretch")
+    with c2:
+        st.markdown("**Pricing model**")
+        st.write({
+            "Service fee": f"${platforms.AZURE_LOCAL_CORE_MONTH_EXTERNAL_SAN if ext_san else platforms.AZURE_LOCAL_CORE_MONTH:.2f}"
+                           " per physical core per month",
+            "Windows guest rights": "Waived by Azure Hybrid Benefit" if ahb else
+                                    f"${platforms.AZURE_LOCAL_WINDOWS_GUEST_CORE_MONTH:.2f} "
+                                    "per core per month",
+            "Free period": f"{platforms.AZURE_LOCAL_FREE_DAYS} days",
+            "VMware licence": "None required",
+            "Minimum cluster": "1 node",
+        })
+
+    st.dataframe(al2["breakdown"].rename(columns={
+        "component": "Component", "annual_cost": "Annual", "basis": "Basis",
+        "share_pct": "Share %"}).round(1), hide_index=True, width="stretch",
+        column_config={"Basis": st.column_config.TextColumn(width="large")})
+
+    st.markdown("### What to know before recommending it")
+    for n in al2["notes"]:
+        st.markdown(f"- {n}")
+
+    plat = platforms.platforms_frame()
+    row = plat[plat["platform"].str.startswith("Azure Local")].iloc[0]
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**In its favour**")
+        for x in row["pros"]:
+            st.success(x)
+    with c2:
+        st.markdown("**Against it**")
+        for x in row["cons"]:
+            st.warning(x)
+
+    st.markdown("### The other on-premises Azure options")
+    for name in ["Azure Stack Hub", "Azure Arc only"]:
+        r = plat[plat["platform"].str.startswith(name)].iloc[0]
+        with st.expander(f"{r['platform']} -- {r['location']}"):
+            st.markdown(r["summary"])
+            st.markdown(f"**Cost model.** {r['cost_model']}")
+            c1, c2 = st.columns(2)
+            with c1:
+                for x in r["pros"]:
+                    st.success(x)
+            with c2:
+                for x in r["cons"]:
+                    st.warning(x)
+            st.info(f"**Best when:** {r['best_when']}")
+
+# --------------------------------------------------------------------------
+with tab_detail:
+    plat = platforms.platforms_frame()
+    fam = st.multiselect("Family", sorted(plat["family"].unique()))
+    view = plat[plat["family"].isin(fam)] if fam else plat
+
+    for _, r in view.iterrows():
+        with st.expander(f"{r['platform']}  |  {r['family']}  |  {r['location']}"):
+            st.markdown(r["summary"])
+            st.markdown(f"**Cost model.** {r['cost_model']}")
+            c1, c2 = st.columns(2)
+            with c1:
+                st.markdown("**In its favour**")
+                for x in r["pros"]:
+                    st.markdown(f"- {x}")
+            with c2:
+                st.markdown("**Against it**")
+                for x in r["cons"]:
+                    st.markdown(f"- {x}")
+            st.info(f"**Best when:** {r['best_when']}")
+            scores = pd.DataFrame([{platforms.CRITERIA[k]: r[k] for k in platforms.CRITERIA}])
+            st.dataframe(scores, hide_index=True, width="stretch")

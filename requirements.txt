@@ -1,0 +1,9 @@
+# st.navigation/st.Page need >=1.36; the width="stretch" API needs >=1.49
+streamlit>=1.49
+pandas>=2.0
+numpy>=1.26
+plotly>=5.20
+requests>=2.31
+openai>=1.40
+python-dotenv>=1.0
+openpyxl>=3.1
