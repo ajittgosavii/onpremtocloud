@@ -375,6 +375,81 @@ def future_state(prs, n):
     footer(s, n)
 
 
+def options(prs, n):
+    """The fourteen destinations, grouped by the five kinds of answer they are."""
+    s = slide(prs)
+    eyebrow(s, "Leaving VMware")
+    heading(s, "Fourteen destinations, six kinds of answer",
+            "Ascend scores all fourteen, including the on-premises ones and doing nothing. "
+            "The choice is not Azure or VMware; it is which of these six you are actually "
+            "choosing between.")
+    y = Inches(2.85)
+    cw = (CONTENT_W - Inches(1.0)) / 3
+    card(s, M, y, cw, Inches(1.95), "Azure public cloud",
+         "Native IaaS, PaaS, and Azure VMware Solution. Leaves the data centre.", ACCENT)
+    card(s, M + cw + Inches(0.5), y, cw, Inches(1.95), "Azure, in your data centre",
+         "Azure Local, Azure Stack Hub, or Azure Arc managing the estate where it is.",
+         ACCENT_2)
+    card(s, M + 2 * (cw + Inches(0.5)), y, cw, Inches(1.95), "Another public cloud",
+         "Google Cloud VMware Engine, Oracle Cloud VMware Solution and OCI native.",
+         RGBColor(0x2E, 0x8F, 0xA3))
+    y2 = y + Inches(2.2)
+    card(s, M, y2, cw, Inches(1.95), "A different hypervisor, same racks",
+         "Hyper-V with SCVMM, Nutanix AHV, OpenShift Virtualization, Proxmox VE. "
+         "New licence, same building.", WARNING)
+    card(s, M + cw + Inches(0.5), y2, cw, Inches(1.95), "Hybrid bare metal",
+         "Nutanix Cloud Clusters on Azure: the same stack in a cloud region, on-premises, "
+         "or both.", POSITIVE)
+    card(s, M + 2 * (cw + Inches(0.5)), y2, cw, Inches(1.95),
+         "Stay, and renegotiate",
+         "VCF 9 on a renewed contract. Modelled as a real option, because sometimes it "
+         "wins.", NEGATIVE)
+    footer(s, n)
+
+
+def which_wins(prs, n):
+    """What the ranking engine says, and the fact that it changes with the goal."""
+    s = slide(prs)
+    eyebrow(s, "Which is better")
+    heading(s, "It changes with what you are optimising for",
+            "These are fit scores from Ascend's own ranking engine. Set the priority and "
+            "the winner moves — which is the honest answer, and the reason the tool exists.")
+
+    rows = [
+        ("Exit the data centre on a deadline", "Azure native IaaS  80",
+         "AVS 74 is the faster exit, but it is sized by memory and lands only ~5% below "
+         "staying on VMware.", ACCENT),
+        ("Cut total cost of ownership", "Azure native IaaS  80",
+         "PaaS scores 76 and runs cheaper still, but costs far more to get to. "
+         "Rehost first, replatform after.", POSITIVE),
+        ("Escape Broadcom licensing", "Azure native IaaS  77",
+         "Hyper-V with SCVMM scores 73 and keeps the workloads on your own racks, "
+         "if leaving the building is not the point.", WARNING),
+        ("Data must stay on-premises", "Hyper-V + SCVMM  83",
+         "Azure Local scores 82 and gives an Azure control plane in your data centre. "
+         "Public cloud is simply not an option here.", ACCENT_2),
+    ]
+    y = Inches(2.9)
+    for i, (goal, winner, why, colour) in enumerate(rows):
+        yy = y + i * Inches(0.92)
+        rect(s, M, yy, Inches(0.05), Inches(0.62), colour)
+        text(s, M + Inches(0.22), yy, Inches(3.5), Inches(0.4),
+             [(goal, 13.5, True, INK, SANS)], spacing=1.15)
+        text(s, M + Inches(3.95), yy, Inches(2.5), Inches(0.4),
+             [(winner, 13.5, True, colour, SANS)])
+        text(s, M + Inches(6.6), yy - Inches(0.02), Inches(4.9), Inches(0.7),
+             [(why, 11.5, False, INK_DIM, SANS)], spacing=1.2)
+
+    # Clear of the footer: the box must end above H - 0.55in or it strikes through it.
+    rect(s, M, Inches(6.08), CONTENT_W, Inches(0.7), CARD, MSO_SHAPE.ROUNDED_RECTANGLE)
+    rect(s, M, Inches(6.08), Inches(0.06), Inches(0.7), ACCENT)
+    text(s, M + Inches(0.3), Inches(6.2), CONTENT_W - Inches(0.6), Inches(0.5),
+         [("Azure scores 92 against AWS 68, OCI 64 and Google 60 on a balanced weighting "
+           "— but that lead is Hybrid Benefit and free ESU. Without Software Assurance it "
+           "narrows sharply, and Ascend says so.", 12.5, True, INK, SANS)], spacing=1.15)
+    footer(s, n)
+
+
 def access(prs, n):
     s = slide(prs)
     eyebrow(s, "Access and data handling")
@@ -453,8 +528,10 @@ def main() -> int:
     your_data(prs, 8)
     journey(prs, 9)
     future_state(prs, 10)
-    access(prs, 11)
-    next_steps(prs, 12)
+    options(prs, 11)
+    which_wins(prs, 12)
+    access(prs, 13)
+    next_steps(prs, 14)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
     prs.save(OUT)
