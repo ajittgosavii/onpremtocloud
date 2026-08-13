@@ -36,7 +36,12 @@ with tab_src:
         "column names are recognised automatically. Performance counters, environment, "
         "criticality and application name are all optional but sharply improve the output.")
 
-    if up is not None:
+    # As on Start here: the uploader returns the same file on every rerun, so the
+    # import must be guarded by a fingerprint or it re-fires in a loop.
+    _token = f"{up.name}:{getattr(up, 'size', 0)}" if up is not None else None
+
+    if up is not None and st.session_state.get("_import_token") != _token:
+        st.session_state["_import_token"] = _token
         try:
             if up.name.lower().endswith(".csv"):
                 raw = pd.read_csv(up)
@@ -45,16 +50,18 @@ with tab_src:
                 pick = next((s for s in sheets if s.lower() in ("vinfo", "tabvinfo")),
                             list(sheets)[0])
                 raw = sheets[pick]
-                st.caption(f"Read sheet: **{pick}** ({len(raw):,} rows).")
             df, warns = inventory.import_inventory(raw)
             st.session_state["uploaded_estate"] = df
+            st.session_state["_import_warnings"] = warns
             scenario.update(use_uploaded=True, estate_source="upload", estate_label=up.name)
-            st.success(f"Imported {len(df):,} VMs.")
-            for w in warns:
-                ui.note(w, "warn")
             st.rerun()
         except Exception as exc:
             st.error(f"Could not import that file: {exc}")
+
+    if up is not None and sc.estate_source == "upload":
+        st.success(f"Imported {len(st.session_state['uploaded_estate']):,} VMs.")
+        for w in st.session_state.get("_import_warnings", []):
+            ui.note(w, "warn")
 
     if sc.estate_source == "upload" and st.session_state.get("uploaded_estate") is not None:
         st.info(f"Using an uploaded inventory of "

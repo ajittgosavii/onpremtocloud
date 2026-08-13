@@ -20,6 +20,12 @@ from core import inventory, scenario, tco, ui
 
 sc = scenario.get_scenario()
 
+
+def _token(upload) -> str:
+    """Identity of an uploaded file, for deciding whether it has been read already."""
+    return f"{upload.name}:{getattr(upload, 'size', 0)}"
+
+
 ui.page_header(
     "Start here",
     "Every number in this application is computed from an estate. Say which estate, "
@@ -71,7 +77,11 @@ with r1:
         st.caption("Needs at minimum a VM name, CPU count, memory and guest OS. RVTools "
                    "column names are recognised automatically; performance counters, "
                    "environment and application name sharply improve the output.")
-        if up is not None:
+        # st.file_uploader keeps returning the same file on every rerun, so an
+        # unguarded import re-fires forever: import -> rerun -> import. The
+        # fingerprint makes the import happen once per distinct file.
+        if up is not None and st.session_state.get("_import_token") != _token(up):
+            st.session_state["_import_token"] = _token(up)
             try:
                 if up.name.lower().endswith(".csv"):
                     raw = pd.read_csv(up)
@@ -82,14 +92,18 @@ with r1:
                     raw = sheets[pick]
                 df, warns = inventory.import_inventory(raw)
                 st.session_state["uploaded_estate"] = df
+                st.session_state["_import_warnings"] = warns
                 scenario.update(use_uploaded=True, estate_source="upload",
                                 estate_label=up.name)
-                st.success(f"Imported {len(df):,} VMs from {up.name}.")
-                for w in warns:
-                    ui.note(w, "warn")
                 st.rerun()
             except Exception as exc:
                 st.error(f"Could not read that file: {exc}")
+
+        if up is not None and sc.estate_source == "upload":
+            st.success(f"Imported {len(st.session_state['uploaded_estate']):,} VMs "
+                       f"from {up.name}.")
+            for w in st.session_state.get("_import_warnings", []):
+                ui.note(w, "warn")
 
         sample = pathlib.Path("data/sample_rvtools_300vm.xlsx")
         if sample.exists():
