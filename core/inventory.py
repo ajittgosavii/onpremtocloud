@@ -7,6 +7,8 @@ that actually block or slow a migration (RDMs, shared disks, snapshots, stale
 VMware Tools, vGPU, MSCS clusters).
 """
 
+import re
+
 import numpy as np
 import pandas as pd
 
@@ -306,6 +308,130 @@ RVTOOLS_MAP = {
 REQUIRED = ["vm_name", "vcpu", "ram_gib", "guest_os"]
 
 
+# --------------------------------------------------------------------------
+# Inference from what an RVTools export actually carries
+#
+# vInfo has no environment, tier or application column, but it does have Folder,
+# Annotation and the VM name, and almost every estate encodes at least one of the
+# three in those. Reading them turns "four things are missing" into "three were
+# inferred and here is how", which is both more useful and more honest than
+# defaulting everything to Production/App/Unassigned and warning about it.
+#
+# Longest patterns first: "prod" must not match before "non-prod".
+# --------------------------------------------------------------------------
+ENV_PATTERNS = [
+    (r"non[-_ ]?prod|nonprod", "Test"),
+    (r"\bdr\b|disaster|failover", "DR"),
+    (r"\buat\b|accept|preprod|pre[-_ ]?prod|staging|stage", "UAT"),
+    (r"\btest\b|\btst\b|\bqa\b", "Test"),
+    (r"\bdev\b|develop|sandbox|\bsbx\b", "Development"),
+    (r"\bprod\b|production|\bprd\b|\blive\b", "Production"),
+]
+
+# Tier keywords match against the alphabetic tokens of a host name rather than on
+# word boundaries: \bdb\b never matches inside "rdb0004", which is exactly how
+# estates name things -- one letter of environment, a role code, an ordinal.
+#
+# Each tier carries two lists. Affix keywords hit when a token starts or ends
+# with them, so "websrv", "billingdb" and "tmw" all match. A few short codes are
+# exact-only because as affixes they misfire: "ad" would claim "adapter" and
+# "load", "dc" would claim "dcom", "fe" would claim "safe".
+TIER_TOKENS = [
+    # (tier, affix keywords, exact-only keywords)
+    ("Database", ["sql", "oracle", "ora", "postgres", "postgre", "mysql", "mongo",
+                  "maria", "db", "dbs", "database", "rds"], ["pg"]),
+    ("Web", ["web", "iis", "nginx", "apache", "httpd", "www", "frontend", "front",
+             "portal"], ["fe"]),
+    ("Middleware", ["mw", "middleware", "tomcat", "jboss", "weblogic", "websphere",
+                    "kafka", "esb", "rabbit", "broker"], ["mq"]),
+    ("Infrastructure", ["inf", "infra", "dns", "dhcp", "ntp", "proxy", "backup",
+                        "bkp", "monitor", "print", "vault", "jump", "bastion",
+                        "domain"], ["ad", "dc", "mon"]),
+    ("Batch", ["bat", "batch", "job", "jobs", "sched", "etl", "report", "rpt",
+               "cron", "worker"], []),
+    ("App", ["app", "application", "srv", "api", "svc", "service"], []),
+]
+
+# Only named engines. A host called "rdb0004" is a database of some sort, but
+# which one decides whether it lands on SQL Managed Instance, a PostgreSQL
+# flexible server or an Oracle VM, and guessing that from three letters would be
+# inventing the single most consequential fact about the workload.
+# Order is load-bearing: "pgsql" and "mysql" both end in "sql", so the specific
+# engines must be tested before the generic SQL Server rule claims them.
+DB_ENGINE_TOKENS = [
+    ("PostgreSQL", ["postgres", "postgre", "pgsql", "psql"]),
+    ("MySQL", ["mysql", "maria", "mariadb"]),
+    ("MongoDB", ["mongo", "mongodb"]),
+    ("Oracle Database", ["oracle", "orcl", "ora"]),
+    ("Microsoft SQL Server", ["mssql", "sqlsrv", "sqlserver", "sql"]),
+]
+
+_TOKEN_SPLIT = re.compile(r"[^a-z]+")
+
+
+def infer_db_engine(name: str) -> str | None:
+    """Database engine from a host name, when the name actually names one."""
+    tokens = [t for t in _TOKEN_SPLIT.split(str(name).lower()) if t]
+    for engine, keywords in DB_ENGINE_TOKENS:
+        for token in tokens:
+            if any(token.startswith(kw) or token.endswith(kw) for kw in keywords):
+                return engine
+    return None
+
+_ENV_PREFIX = {"p": "Production", "u": "UAT", "t": "Test", "d": "Development",
+               "r": "DR"}
+
+
+def _match(text: str, patterns: list[tuple[str, str]]) -> str | None:
+    low = str(text).lower()
+    for pattern, value in patterns:
+        if re.search(pattern, low):
+            return value
+    return None
+
+
+def _infer_series(df: pd.DataFrame, columns: list[str],
+                  patterns: list[tuple[str, str]]) -> pd.Series:
+    """First match across the given columns, in order, per row."""
+    out = pd.Series([None] * len(df), index=df.index, dtype=object)
+    for col in columns:
+        if col not in df.columns:
+            continue
+        missing = out.isna()
+        if not missing.any():
+            break
+        out.loc[missing] = df.loc[missing, col].map(lambda v: _match(v, patterns))
+    return out
+
+
+def infer_tier(name: str) -> str | None:
+    """Workload tier from a host name, or None when the name does not say."""
+    tokens = [t for t in _TOKEN_SPLIT.split(str(name).lower()) if t]
+    for tier, affixes, exacts in TIER_TOKENS:
+        for token in tokens:
+            if token in exacts:
+                return tier
+            if any(token.startswith(kw) or token.endswith(kw) for kw in affixes):
+                return tier
+    return None
+
+
+def infer_app_name(names: pd.Series) -> pd.Series:
+    """Group VMs into applications by the first token of a separated host name.
+
+    ``billing-sql-01`` and ``billing-web-02`` are one application. A name with no
+    separator is not guessed at: ``pweb0012`` looks like a stem but is really an
+    environment letter and a role code, and grouping on it would invent thirty
+    "applications" that are really six roles across five environments. A wrong
+    grouping is worse than none, because dependency scoring and the wave plan
+    both read it.
+    """
+    text = names.astype(str).str.strip()
+    first = text.str.split(r"[-_.]").str[0].str.replace(r"[0-9]+$", "", regex=True)
+    separated = text.str.contains(r"[-_.]") & first.str.len().ge(3)
+    return first.where(separated, "Unassigned").replace("", "Unassigned")
+
+
 def import_inventory(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     """Normalise an uploaded RVTools ``vInfo`` sheet (or a generic CSV) to the
     internal schema. Returns the frame plus a list of human-readable warnings."""
@@ -328,6 +454,63 @@ def import_inventory(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
             "Expected an RVTools vInfo export or a CSV with vm_name/vcpu/ram_gib/guest_os."
         )
 
+    # ---- infer what vInfo does not carry, before defaulting anything --------
+    inferred: list[str] = []
+
+    if "environment" not in df.columns:
+        env = _infer_series(df, ["folder", "notes", "vm_name"], ENV_PATTERNS)
+        blank = env.isna()
+        if blank.any() and "vm_name" in df.columns:
+            # The generator's own convention: a single leading letter for the env.
+            env.loc[blank] = (df.loc[blank, "vm_name"].astype(str).str[:1].str.lower()
+                              .map(_ENV_PREFIX))
+        found = int(env.notna().sum())
+        if found:
+            source = "the Folder column" if "folder" in df.columns else "VM names"
+            inferred.append(f"**Environment** read from {source} for {found:,} of "
+                            f"{len(df):,} VMs.")
+        df["environment"] = env.fillna("Production")
+
+    if "tier" not in df.columns and "vm_name" in df.columns:
+        tier = df["vm_name"].map(infer_tier)
+        blank = tier.isna()
+        if blank.any() and "folder" in df.columns:
+            tier.loc[blank] = df.loc[blank, "folder"].map(infer_tier)
+        found = int(tier.notna().sum())
+        if found:
+            inferred.append(f"**Workload tier** read from naming conventions for "
+                            f"{found:,} of {len(df):,} VMs.")
+        df["tier"] = tier.fillna("App")
+
+    if "db_engine" not in df.columns and "vm_name" in df.columns:
+        engine = df["vm_name"].map(infer_db_engine)
+        found = int(engine.notna().sum())
+        if found:
+            inferred.append(f"**Database engine** named in the host name for {found:,} "
+                            "VMs, which is what sends them to a managed database service "
+                            "rather than a VM.")
+        df["db_engine"] = engine.fillna("None")
+
+    if "app_name" not in df.columns and "vm_name" in df.columns:
+        df["app_name"] = infer_app_name(df["vm_name"])
+        named = int((df["app_name"] != "Unassigned").sum())
+        if named:
+            inferred.append(f"**Applications** grouped by host-name prefix into "
+                            f"{df['app_name'].nunique():,} groups.")
+        else:
+            warnings.append(
+                "**Application grouping could not be guessed.** These host names carry no "
+                "separator to split on, so every VM is unassigned and the dependency "
+                "score is the same for all of them. Add an application column to the "
+                "upload if you want wave planning to respect application boundaries.")
+
+    if inferred:
+        warnings.append(
+            "Inferred from the upload, because RVTools vInfo has no column for it: "
+            + " ".join(inferred)
+            + " Check these on **Browse inventory**; correct classification changes the "
+              "7R disposition, the wave plan and the effort model.")
+
     for col, default in [
         ("provisioned_gib", 100.0), ("used_gib", np.nan), ("os_disk_gib", 80.0),
         ("data_disk_count", 1), ("nic_count", 1), ("firmware", "bios"),
@@ -338,9 +521,12 @@ def import_inventory(df_raw: pd.DataFrame) -> tuple[pd.DataFrame, list[str]]:
     ]:
         if col not in df.columns:
             df[col] = default
-            if col in ("environment", "criticality", "tier", "app_name"):
-                warnings.append(f"'{col}' not in the upload -- defaulted to '{default}'. "
-                                "Classification quality will be limited until you supply it.")
+            if col == "criticality":
+                warnings.append(
+                    "**Business criticality** is not in the upload and cannot be guessed "
+                    f"from it, so every VM is treated as '{default}'. Set it on "
+                    "**Browse inventory** for anything tier 0 or tier 1: it drives "
+                    "downtime tolerance and cutover risk.")
 
     if "power_state" in df.columns:
         df["powered_on"] = df["power_state"].astype(str).str.lower().str.contains("on")

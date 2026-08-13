@@ -100,7 +100,55 @@ def main() -> int:
     print(f"    programme cost {res.effort_summary['migration_cost']:,.0f}, "
           f"{res.effort_summary['total_effort_hours']:,.0f} effort hours, "
           f"{res.schedule_summary.get('waves', 0)} waves")
+
+    if not check_inference():
+        return 1
     return 0
+
+
+# Host-name inference has to be right in both directions: it must read the
+# conventions estates actually use, and it must stay quiet on names that merely
+# look like they carry meaning. A wrong tier or engine changes the disposition.
+TIER_CASES = {
+    "tmw0001": "Middleware", "uinf0002": "Infrastructure", "tweb0003": "Web",
+    "rdb0004": "Database", "pbat0005": "Batch", "papp0100": "App",
+    "billing-sql-01": "Database", "PRDWEB07": "Web", "ORA-RAC-3": "Database",
+    "pgsql-node2": "Database", "vm-tomcat-3": "Middleware",
+    # must NOT match: substrings that only look like role codes
+    "sandbox01": None, "adapter02": None, "dcom-node1": None, "loadgen3": None,
+    "safe-store": None,
+}
+ENGINE_CASES = {
+    "billing-sql-01": "Microsoft SQL Server", "mssql-node2": "Microsoft SQL Server",
+    "ORA-RAC-3": "Oracle Database", "pgsql-node2": "PostgreSQL",
+    "crm-postgres-1": "PostgreSQL", "mysql-cart": "MySQL", "mongo-shard2": "MongoDB",
+    # a generic "db" names no engine, and guessing one would decide the target
+    "rdb0004": None, "pweb0007": None,
+}
+
+
+def check_inference() -> bool:
+    failures = 0
+    for name, want in TIER_CASES.items():
+        got = inventory.infer_tier(name)
+        if got != want:
+            failures += 1
+            print(f"    FAIL tier   {name!r} -> {got!r}, expected {want!r}")
+    for name, want in ENGINE_CASES.items():
+        got = inventory.infer_db_engine(name)
+        if got != want:
+            failures += 1
+            print(f"    FAIL engine {name!r} -> {got!r}, expected {want!r}")
+
+    apps = inventory.infer_app_name(
+        pd.Series(["billing-sql-01", "billing-web-02", "crm-app-1", "pweb0007"]))
+    if list(apps) != ["billing", "billing", "crm", "Unassigned"]:
+        failures += 1
+        print(f"    FAIL app grouping -> {list(apps)}")
+
+    print(f"  host-name inference: {len(TIER_CASES) + len(ENGINE_CASES) + 1} cases, "
+          f"{failures} failed")
+    return failures == 0
 
 
 if __name__ == "__main__":
