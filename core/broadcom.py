@@ -183,21 +183,35 @@ class Segment:
     high: float
     strategies: tuple        # 7R strategies in this application that map here
     destination: str
+    rationale: str = ""      # why that destination, for the target-state table
 
 
 SEGMENTS = [
     Segment("Retire", 10, 25, ("Retire",),
-            "Decommission -- the cheapest migration is the one not performed."),
+            "Decommission -- the cheapest migration is the one not performed.",
+            "Between a tenth and a quarter of a typical estate has no active users. "
+            "Removing it is the highest-return activity in the programme."),
     Segment("Replace", 5, 15, ("Repurchase",),
-            "SaaS or an Azure managed service."),
+            "SaaS or an Azure managed service.",
+            "Commodity function with a viable managed equivalent. Avoids migrating "
+            "something that should not exist as a VM."),
     Segment("Refactor / replatform", 10, 25, ("Replatform", "Refactor"),
-            "Azure PaaS, AKS, Azure SQL, Azure Database for PostgreSQL / MySQL."),
+            "Azure PaaS, AKS, Azure SQL, Azure Database for PostgreSQL / MySQL.",
+            "Best long-run economics where the application team has capacity. Run it "
+            "as a parallel track, never on the critical path of the exit."),
     Segment("Rehost", 35, 55, ("Rehost",),
-            "Azure IaaS."),
+            "Azure IaaS.",
+            "Removes the Broadcom relationship entirely, provides elastic consumption "
+            "and creates the on-ramp to later modernisation."),
     Segment("Relocate", 5, 15, ("Relocate",),
-            "AVS as a time-boxed bridge, or Azure Local."),
+            "AVS as a time-boxed bridge, or NC2 on Azure.",
+            "For workloads that cannot re-platform inside the window. NC2 should be "
+            "evaluated against AVS specifically, because it carries no Broadcom "
+            "requirement and AVS does."),
     Segment("Retain on-premises", 5, 20, ("Retain",),
-            "Azure Local, Hyper-V or Nutanix AHV."),
+            "Azure Local or Hyper-V.",
+            "Residency, latency, regulatory or OT-integration constraints. Evaluate "
+            "Nutanix AHV as the alternative if the residual is large."),
 ]
 
 
@@ -253,6 +267,11 @@ SCENARIO_C_LINES = [
      "After right-sizing, with reservation and savings plan coverage modelled."),
     ("Azure Hybrid Benefit and Extended Security Updates", True,
      "Quantified rather than assumed."),
+    ("Egress and inter-region data transfer", False,
+     "Steady-state egress is modelled in the run cost, but the expensive part is not: "
+     "the transitional period when applications straddle both environments and every "
+     "call between them crosses a charged boundary. Size it from the dependency map, "
+     "for the length of the double-run."),
     ("Double-run cost across the transition", True,
      "Both platforms paid for simultaneously. Frequently the largest single line "
      "and the one most often omitted."),

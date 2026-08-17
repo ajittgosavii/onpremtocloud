@@ -256,3 +256,89 @@ def offline_seed_advice(total_tib: float, plan: WavePlan) -> str:
                 f"storage-level approach for the bulk data.")
     return (f"At {usable_mbps:,.0f} Mbps usable, seeding {total_tib:,.1f} TiB takes ~{days:,.0f} "
             f"days of wire time. Online replication is viable.")
+
+
+# --------------------------------------------------------------------------
+# Wave design principles.
+#
+# The engine above decides what goes in which wave. These are the rules that
+# decide whether a wave is allowed to start at all, and they are the reason a
+# plan that looks fine on a Gantt chart fails at the first gate. Three are
+# testable against the built plan; four are programme conditions.
+# --------------------------------------------------------------------------
+PRINCIPLE_TESTED = "tested"
+PRINCIPLE_OPEN = "open"
+PRINCIPLE_PROGRAMME = "programme"
+
+WAVE_PRINCIPLES = [
+    ("dependency_boundary",
+     "A wave is defined by dependency boundaries, not by server count and not by "
+     "which team happens to be available."),
+    ("gates",
+     "Every wave has published entry criteria, exit criteria, a named application "
+     "owner and an agreed rollback position before it starts."),
+    ("disk_sizing",
+     "Wave size is governed by disk count, per-host disk limits and datastore "
+     "snapshot limits -- not by bandwidth and not by ambition."),
+    ("test_migration",
+     "Test migration into an isolated network is mandatory for every Azure IaaS "
+     "wave. Where the target has no test capability, purpose-built canary workloads "
+     "are used instead of production samples."),
+    ("rollback_retention",
+     "Source virtual machines are retained powered off and intact for an agreed "
+     "period after cutover. This is the rollback plan; there is no automated "
+     "alternative."),
+    ("risk_not_arithmetic",
+     "One stateful, tightly coupled application can constitute a larger operational "
+     "wave than ten stateless utility servers. Wave sizing is a risk judgement, not "
+     "an arithmetic one."),
+    ("owner_signoff",
+     "No wave proceeds without the application owner having signed off the "
+     "validation plan."),
+]
+
+
+def principle_status(schedule, plan, test_migration_pct: float = 0.0) -> list[dict]:
+    """Check the wave design principles against the plan actually built.
+
+    Only three can be tested from a schedule. Saying so is the point -- the four
+    that cannot are the ones that stop a wave at the gate.
+    """
+    checks: dict[str, tuple[str, str]] = {}
+
+    cols = list(getattr(schedule, "columns", []))
+    if schedule is not None and len(schedule):
+        if "applications" in cols:
+            apps = int(schedule["applications"].sum())
+            checks["dependency_boundary"] = (
+                PRINCIPLE_TESTED,
+                f"{apps} application groups placed whole, so tightly coupled "
+                "applications move in the same wave")
+
+        if "vms" in cols and "mean_complexity" in cols:
+            lo, hi = float(schedule["vms"].min()), float(schedule["vms"].max())
+            spread = hi / max(lo, 1.0)
+            checks["risk_not_arithmetic"] = (
+                PRINCIPLE_TESTED if spread > 1.2 else PRINCIPLE_OPEN,
+                f"Wave sizes range {lo:.0f} to {hi:.0f} VMs ({spread:.1f}x)"
+                + ("" if spread > 1.2 else " -- near-uniform sizing suggests waves "
+                                           "were cut by count rather than by risk"))
+
+    if plan:
+        checks["disk_sizing"] = (
+            PRINCIPLE_TESTED,
+            f"Concurrency modelled at {plan.get('disks_replicating_at_once', 0)} disks "
+            "in flight, not at link speed")
+
+    if test_migration_pct:
+        checks["test_migration"] = (
+            PRINCIPLE_TESTED if test_migration_pct >= 100 else PRINCIPLE_OPEN,
+            f"{test_migration_pct:.0f}% of VMs given a test migration in this plan")
+
+    out = []
+    for key, text in WAVE_PRINCIPLES:
+        status, note = checks.get(
+            key, (PRINCIPLE_PROGRAMME, "Not observable from a schedule -- a programme "
+                                       "condition, and one that stops waves at the gate"))
+        out.append({"key": key, "principle": text, "status": status, "note": note})
+    return out

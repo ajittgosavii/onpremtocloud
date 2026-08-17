@@ -261,3 +261,59 @@ with tab_content:
                       "azure_sku", "used_gib", "daily_churn_pct", "complexity",
                       "cutover_failure_risk"]].round(2),
                  hide_index=True, width="stretch", height=400)
+
+
+# --------------------------------------------------------------------------
+# Wave design principles.
+#
+# The plan above answers how long. These answer whether a wave is allowed to
+# start at all -- and they are the reason a plan that looks fine on a Gantt
+# chart fails at its first gate.
+# --------------------------------------------------------------------------
+ui.section(
+    "Wave design principles",
+    "Seven rules that decide whether a wave can start. Four are testable "
+    "against the plan built above; three are programme conditions no schedule "
+    "can show, and those are the ones that actually stop waves.")
+
+_mig = st.session_state.get("migrate_summary") or {}
+_principles = waves.principle_status(
+    res.schedule,
+    st.session_state.get("migrate_appliance_plan"),
+    float(st.session_state.get("migrate_test_pct", 0.0)))
+
+_pn = {k: sum(1 for r in _principles if r["status"] == k)
+       for k in (waves.PRINCIPLE_TESTED, waves.PRINCIPLE_OPEN,
+                 waves.PRINCIPLE_PROGRAMME)}
+
+ui.metric_row([
+    ("Demonstrated by this plan", f"{_pn[waves.PRINCIPLE_TESTED]} of {len(_principles)}",
+     "checked against the schedule"),
+    ("Plan does not satisfy", f"{_pn[waves.PRINCIPLE_OPEN]}", "visible here and open"),
+    ("Programme conditions", f"{_pn[waves.PRINCIPLE_PROGRAMME]}",
+     "no schedule can evidence these"),
+], tones=["pos", "neg" if _pn[waves.PRINCIPLE_OPEN] else "pos", ""])
+
+_PLABEL = {waves.PRINCIPLE_TESTED: "Demonstrated",
+           waves.PRINCIPLE_OPEN: "Not satisfied",
+           waves.PRINCIPLE_PROGRAMME: "Programme condition"}
+st.dataframe(
+    pd.DataFrame([{"Status": _PLABEL[r["status"]], "Principle": r["principle"],
+                   "What this plan shows": r["note"]} for r in _principles]),
+    hide_index=True, width="stretch", height=330,
+    column_config={"Principle": st.column_config.TextColumn(width="large"),
+                   "What this plan shows": st.column_config.TextColumn(width="medium")})
+
+ui.note(
+    "<b>The rollback plan is the one people assume exists and does not.</b> There is no "
+    "automated fallback once a migration completes. Rollback means keeping the source "
+    "virtual machine powered off and intact for an agreed period, and that period has to "
+    "be decided per wave and written down before the wave starts -- because the storage "
+    "it consumes is the reason somebody will propose deleting it early.", "warn")
+
+ui.takeaway(
+    "A wave is a risk judgement, not an arithmetic one. One stateful, tightly coupled "
+    "application can be a larger operational wave than ten stateless utility servers, "
+    "which is why the wave sizes above are deliberately uneven. If a client asks why the "
+    "waves are not the same size, that is the answer -- and a plan with perfectly even "
+    "waves is usually one that was cut by server count.")
