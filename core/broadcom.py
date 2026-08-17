@@ -440,3 +440,73 @@ def check_antipatterns(facts: dict) -> list:
         out.append((name, None, "Not observable from the model", why))
 
     return out
+
+
+# --------------------------------------------------------------------------
+# Discovery data checklist.
+#
+# The point of this list is the "source" column, not the items. Ten of the
+# fifteen are not produced by any discovery tool -- they come from the CMDB,
+# the service owners, the network team and procurement. The rest of this
+# application argues that the migration tooling covers only part of the estate;
+# this is the list that proves it, and it is the one a programme skips.
+# --------------------------------------------------------------------------
+TOOL_SOURCED = "Discovery tooling"
+PROGRAMME_SOURCED = "Programme-sourced"
+
+# (item, source, who supplies it, the column in an uploaded estate that
+#  evidences it -- or None where nothing in an inventory export can)
+DISCOVERY_CHECKLIST = [
+    ("VM inventory: name, vCPU, memory, disk count and size, NICs, OS version, "
+     "power state", TOOL_SOURCED, "Azure Migrate discovery", "vm_name"),
+    ("Performance profile: CPU, memory, disk IOPS and throughput, network, over a "
+     "30-day window", TOOL_SOURCED, "Azure Migrate discovery", "cpu_p95_pct"),
+    ("Installed software, roles and features per guest", TOOL_SOURCED,
+     "Azure Migrate guest inventory", None),
+    ("SQL Server instance and database inventory with compatibility findings",
+     TOOL_SOURCED, "Azure Migrate + Data Migration Assistant", "db_engine"),
+    ("Network dependency map", TOOL_SOURCED,
+     "Azure Migrate dependency analysis", None),
+    ("Application-to-server mapping and business criticality", PROGRAMME_SOURCED,
+     "CMDB and application owners", "app_name"),
+    ("Recovery time and recovery point objectives per application",
+     PROGRAMME_SOURCED, "Service owners", None),
+    ("Change window availability and blackout periods per application",
+     PROGRAMME_SOURCED, "Service owners", None),
+    ("Third-party virtual appliance inventory with vendor support statements",
+     PROGRAMME_SOURCED, "Vendor engagement", None),
+    ("Hardware-bound licensing: dongles, MAC-bound licences, licence servers",
+     PROGRAMME_SOURCED, "Application owners", "licence_mac_bound"),
+    ("Existing DR topology, replication pairs and Site Recovery Manager runbook "
+     "logic", PROGRAMME_SOURCED, "Infrastructure team", None),
+    ("Backup policy, retention, immutability and restore-test evidence",
+     PROGRAMME_SOURCED, "Backup team", None),
+    ("NSX micro-segmentation rule set and distributed switch configuration",
+     PROGRAMME_SOURCED, "Network team", None),
+    ("IP addressing plan, DNS dependencies and hard-coded address inventory",
+     PROGRAMME_SOURCED, "Network and application teams", None),
+    ("VMware entitlement position: core counts, editions, renewal dates, "
+     "perpetual-key exposure", PROGRAMME_SOURCED, "Procurement", None),
+]
+
+
+def discovery_coverage(columns) -> list[dict]:
+    """Score the discovery checklist against the columns actually present.
+
+    ``columns`` is whatever the loaded inventory carries. An item is "held" only
+    where a column evidences it; everything else is outstanding, including every
+    item no inventory export could ever satisfy. That asymmetry is the point --
+    a full-looking estate file still leaves two thirds of this list open.
+    """
+    cols = set(columns)
+    out = []
+    for item, source, who, evidence in DISCOVERY_CHECKLIST:
+        held = bool(evidence) and evidence in cols
+        out.append({
+            "item": item, "source": source, "who": who,
+            "held": held,
+            "evidence": (f"Present as `{evidence}`" if held
+                         else ("Not in the loaded inventory" if evidence
+                               else "No inventory export carries this")),
+        })
+    return out

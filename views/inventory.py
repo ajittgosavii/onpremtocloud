@@ -11,7 +11,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import inventory, scenario, ui
+from core import broadcom, inventory, scenario, ui
 
 sc = scenario.get_scenario()
 
@@ -273,3 +273,62 @@ with tab_quality:
         "Everything on this page is remediation backlog. It is cheaper to clear before the "
         "first wave than to discover during one - and most of it can be cleared by the "
         "platform team without touching an application.")
+
+
+# --------------------------------------------------------------------------
+# What discovery has not given you.
+#
+# The rest of this page shows what the inventory contains. This shows what a
+# migration needs and no inventory export carries -- which is the argument the
+# application makes everywhere else, stated as a list somebody can action.
+# --------------------------------------------------------------------------
+ui.section(
+    "Discovery data checklist",
+    "Fifteen items a wave plan depends on. Ten of them are not produced by any "
+    "discovery tool -- they come from the CMDB, the service owners, the network "
+    "team and procurement, and they are the ones a programme discovers it is "
+    "missing at the first wave gate.")
+
+_disc = broadcom.discovery_coverage(res.estate.columns)
+_held = sum(r["held"] for r in _disc)
+_prog = [r for r in _disc if r["source"] == broadcom.PROGRAMME_SOURCED]
+_prog_held = sum(r["held"] for r in _prog)
+
+ui.metric_row([
+    ("Evidenced by this inventory", f"{_held} of {len(_disc)}",
+     "everything else is outstanding"),
+    ("Programme-sourced items", f"{len(_prog)}",
+     "no tool produces these"),
+    ("Programme-sourced still open", f"{len(_prog) - _prog_held}",
+     "each needs a named owner"),
+    ("Tool-sourced still open", f"{sum(1 for r in _disc if not r['held'] and r['source'] == broadcom.TOOL_SOURCED)}",
+     "discovery will close these"),
+], tones=["", "", "neg" if len(_prog) - _prog_held else "pos", ""])
+
+st.dataframe(
+    pd.DataFrame([{
+        "Held": "Yes" if r["held"] else "No",
+        "Data item": r["item"],
+        "Source": r["source"],
+        "Who supplies it": r["who"],
+        "Evidence here": r["evidence"]} for r in _disc]),
+    hide_index=True, width="stretch", height=560,
+    column_config={"Data item": st.column_config.TextColumn(width="large"),
+                   "Evidence here": st.column_config.TextColumn(width="medium")})
+
+ui.note(
+    f"<b>{len(_prog) - _prog_held} of the {len(_prog)} programme-sourced items are still "
+    "open.</b> None of them will be closed by running discovery for longer. RTO and RPO "
+    "per application, change windows, vendor support statements for third-party "
+    "appliances, Site Recovery Manager runbook logic, backup immutability evidence, the "
+    "micro-segmentation rule set and the entitlement position are all conversations with "
+    "people, and each one has a lead time. Start them in parallel with discovery rather "
+    "than after it.", "warn")
+
+ui.takeaway(
+    "The value of this list is the <b>source</b> column, not the items. A steering "
+    "committee that has seen a discovery report generally believes discovery is done. "
+    "Two thirds of what a wave plan actually needs is not in that report and never will "
+    "be -- and the items are exactly the ones that stop a cutover: an appliance the "
+    "vendor will not support, a licence bound to a MAC address, an RTO nobody can meet "
+    "on the target.")
