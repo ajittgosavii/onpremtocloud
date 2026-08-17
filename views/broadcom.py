@@ -182,6 +182,31 @@ for i, (lever, why) in enumerate(broadcom.NEGOTIATION_LEVERS, 1):
     st.caption(why)
 
 # --------------------------------------------------------------------------
+ui.section(
+    "Questions to put to the vendor",
+    "The levers above are what to ask for. These establish whether the ask is "
+    "even available. Written to be asked directly by procurement rather than "
+    "paraphrased by an architect.")
+
+st.dataframe(
+    pd.DataFrame([{"Topic": t, "Question": q}
+                  for t, q in broadcom.RENEWAL_QUESTIONS]),
+    hide_index=True, width="stretch", height=490,
+    column_config={"Question": st.column_config.TextColumn(width="large")})
+
+ui.note(
+    "Three of these are worth more than the rest and are routinely not asked: how many "
+    "of the licensed cores are <b>phantom</b> under the sixteen-core minimum, whether "
+    "<b>portability is in the contract</b> rather than in guidance, and what uplift "
+    "applies to a <b>late renewal</b>. The first sizes the bill, the second decides "
+    "whether a bridge platform is usable, and the third turns the renewal date from a "
+    "deadline into a managed financial control.")
+
+ui.df_download(
+    pd.DataFrame([{"Topic": t, "Question": q} for t, q in broadcom.RENEWAL_QUESTIONS]),
+    "renewal_questions.csv", "Download the question list for procurement")
+
+# --------------------------------------------------------------------------
 with st.expander("What already changed, and is not coming back", expanded=False):
     for title, detail in broadcom.IN_FORCE:
         st.markdown(f"**{title}**")

@@ -124,17 +124,51 @@ with tab_rank:
             "Best suited to": a.best_for} for a in broadcom.ARCHETYPES]),
             hide_index=True, width="stretch")
 
-    st.markdown("### How they score across every criterion")
-    heat = ranked.set_index("platform")[list(platforms.CRITERIA)]
-    heat.columns = [platforms.CRITERIA[c] for c in heat.columns]
-    fig = px.imshow(heat, color_continuous_scale=ui.SEQUENTIAL, aspect="auto",
-                    labels=dict(color="Score 1-5"), text_auto=True)
-    fig.update_layout(height=560, xaxis_title="", yaxis_title="",
-                      xaxis=dict(side="top", tickangle=-40))
-    st.plotly_chart(fig, width="stretch")
-    st.caption("Scores are 1-5 and deliberately opinionated. Each is defensible from the "
-               "trade-offs listed on the All options tab - they are a starting point for a "
-               "client conversation, not vendor marketing numbers.")
+    # ---- three matrices, not one -------------------------------------------
+    # A single wide matrix compresses exactly the nuance that decides this, so
+    # the comparison is split into the three views the source assessment uses:
+    # strategic fit, enterprise readiness, and commercial and risk shape.
+    st.markdown("### How they score, in three views")
+    st.caption(
+        "Split deliberately. One wide matrix across sixteen criteria compresses the "
+        "nuance that matters -- a platform can be an excellent strategic fit and an "
+        "unacceptable enterprise risk, and a single averaged row hides that.")
+
+    _MATRICES = [
+        ("Strategic fit",
+         "Does it deliver the objective, and what does getting there cost?",
+         ["broadcom_exit", "exit_speed", "migration_effort", "modernisation",
+          "run_cost"]),
+        ("Enterprise readiness",
+         "Can a regulated estate actually run on it?",
+         ["feature_parity", "resilience", "compliance", "ops_burden", "skills_fit",
+          "data_residency", "latency_control"]),
+        ("Commercial and risk shape",
+         "What are you exposed to once you are on it?",
+         ["vendor_risk", "lock_in", "exit_cost", "hardware_impact"]),
+    ]
+
+    for title, subtitle, keys in _MATRICES:
+        st.markdown(f"**{title}** &nbsp;&mdash;&nbsp; {subtitle}")
+        heat = ranked.set_index("platform")[keys]
+        heat.columns = [
+            f"{platforms.CRITERIA[c].split('(')[0].strip()}"
+            f"{'' if platforms.CRITERION_WEIGHT.get(c) in (None, 'Added here') else chr(10) + '(' + platforms.CRITERION_WEIGHT[c] + ')'}"
+            for c in keys]
+        fig = px.imshow(heat, color_continuous_scale=ui.SEQUENTIAL, aspect="auto",
+                        labels=dict(color="Score 1-5"), text_auto=True,
+                        zmin=1, zmax=5)
+        fig.update_layout(height=460, xaxis_title="", yaxis_title="",
+                          xaxis=dict(side="top", tickangle=-30),
+                          margin=dict(t=110))
+        st.plotly_chart(fig, width="stretch")
+
+    st.caption(
+        "Scores are 1-5 and deliberately opinionated; each is defensible from the "
+        "trade-offs listed on the All options tab. The band in brackets is the weight "
+        "the source assessment recommends for that criterion -- one Critical, six High, "
+        "six Medium. Three criteria carry no band because they are scored here and not "
+        "in the source: residency, latency and lock-in.")
 
 # --------------------------------------------------------------------------
 with tab_cost:

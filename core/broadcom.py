@@ -588,3 +588,42 @@ NEXT_STEPS = [
         "secured or formally recorded as declined.",
     ]),
 ]
+
+
+# --------------------------------------------------------------------------
+# Questions to table at renewal.
+#
+# The levers above are what to ask for. These are the questions that establish
+# whether the ask is even available, and they are written to be put directly to
+# the vendor or reseller by procurement rather than paraphrased by an architect.
+# --------------------------------------------------------------------------
+RENEWAL_QUESTIONS = [
+    ("Price", "What is the confirmed list price and available discount structure per "
+     "core, per year, for the specific bundle and term proposed?"),
+    ("Availability", "Which bundles are actually available for purchase in our "
+     "geography and under our agreement type, and can that be confirmed in writing?"),
+    ("Core count", "What is the licensed core count under the sixteen-core-per-CPU "
+     "minimum for our exact host configuration, and how many of those cores are "
+     "phantom?"),
+    ("Capacity", "How is vSAN capacity licensed against our current and projected "
+     "capacity, and what happens commercially when capacity grows?"),
+    ("Term", "What term bands are available, and what is the discount differential "
+     "between them?"),
+    ("Cap", "Will you commit to a renewal price cap for the subsequent cycle, and at "
+     "what level?"),
+    ("Growth", "Will you commit to a price hold on growth cores added during the "
+     "term?"),
+    ("Ramp-down", "Can the subscription be structured as a ramp-down matched to our "
+     "published decommission plan?"),
+    ("Portability", "Does the subscription include portability between on-premises "
+     "hosts and hyperscaler platforms, and is that stated in the contract rather than "
+     "in guidance?"),
+    ("Renewal date", "What is the exact renewal date mechanic, and what uplift applies "
+     "to a late renewal?"),
+    ("Compliance", "What is our current compliance position against entitlement, and "
+     "are there any open audit findings?"),
+    ("Upgrade path", "What is the supported upgrade path and end-of-support date for "
+     "every edition we currently hold?"),
+    ("Support", "What happens to our support entitlement and escalation path given the "
+     "changes to the partner programme?"),
+]
