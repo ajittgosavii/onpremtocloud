@@ -141,7 +141,7 @@ application models Azure Local as a destination and now scores it as a
 recommendable one — while saying nothing about the fact that migrating to it has
 no rehearsal step. That is the same gap the newly added register records as R12.
 
-**Closed in commit `bd394a7`:** twelve entries added, taking the register from 21
+**Closed in commit `316c3b9`:** twelve entries added, taking the register from 21
 to 33, including a new `Target-specific` area for the Azure Local gaps. The
 application is now a genuine superset of §5.9 rather than an assumed one.
 
