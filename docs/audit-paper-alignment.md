@@ -103,15 +103,47 @@ These are not "close enough" — several are exact.
 | §7.1 Three scenarios A/B/C | `tco.three_scenarios` | **Aligned** as of commit `eec6fd9` |
 | §7.2 Scenario C cost lines (11) | `broadcom.SCENARIO_C_LINES` (13) | **Superset**, and each is flagged modelled-or-add-by-hand |
 | §7.3 Negotiation levers (7) | `broadcom.NEGOTIATION_LEVERS` (7) | **All seven** |
-| §5.9 Azure Migrate limitations (14 + considerations) | `azure_migrate_sim.LIMITATIONS` (21) | **Superset**, with severity, impact and workaround per entry |
+| §5.9 Azure Migrate limitations (14 + considerations) | `azure_migrate_sim.LIMITATIONS` | **Was wrong in the first pass of this audit — see the correction below** |
 | §5.10 Where to supplement (7 gaps) | `tools_market` (17 tools, stack recommendation) | **Superset**, and the stack is derived from the live estate |
 | §2.3 Hyperscaler licensing change | `broadcom.MILESTONES`, AVS = *relocated* not eliminated | **Aligned**, and counted against the real clock |
 | §1.2 Timing pressure | `broadcom.milestone_status` | **Aligned** |
 | §6.3 Wave design principles | `waves`, wave plan page | **Mostly** — dependency-boundary sequencing and disk-count sizing are modelled |
 
-On Azure Migrate in particular the application goes materially beyond the paper:
-the paper documents fourteen limitations in prose, the application scores
-twenty-one against the live estate and quantifies the coverage gap.
+### Correction: the Azure Migrate limitations were not a superset
+
+The first pass of this audit recorded §5.9 as covered, on the evidence that the
+application carried twenty-one limitation entries against the paper's fourteen.
+That was a count, not a check — the same mistake the fourteen-versus-fourteen
+platform count invites. Read properly, the two sets overlap rather than nest.
+
+The application was deeper than the paper on databases (five entries; the paper
+does not enumerate database gaps at that level) and on unsupported source
+configurations. It was **missing nine of the paper's items outright**:
+
+| Paper §5.9 | Was it there? |
+|---|---|
+| 7. Agentless replication borrows production SAN IOPS | Missing |
+| 8. CBT fragility, and pre-existing snapshots blocking it | Partial — VMware Tools and CBT health only |
+| 10. vMotion / Storage vMotion during active replication | **Missing** |
+| 11. No test migration for the Azure Local target | **Missing** |
+| 12. Static IP preservation on Azure Local | **Missing** |
+| 13. No live migration to Azure Local or Windows Server | **Missing** |
+| 4. Dependency mapping false positives and negatives | **Missing** |
+| 5. Richer dependency analysis is neither free nor agentless | Partial |
+| 6. Undocumented application-layer dependencies | Partial — in phase prose, not the register |
+| Preview feature churn | **Missing** |
+| Project and region scoping, sovereign-cloud gaps | **Missing** |
+| Appliance as a single point of failure | **Missing** |
+| vCenter permission precision | Present, in phase prose |
+
+The Azure Local trio (11, 12, 13) was the most consequential cluster, because the
+application models Azure Local as a destination and now scores it as a
+recommendable one — while saying nothing about the fact that migrating to it has
+no rehearsal step. That is the same gap the newly added register records as R12.
+
+**Closed in commit `bd394a7`:** twelve entries added, taking the register from 21
+to 33, including a new `Target-specific` area for the Azure Local gaps. The
+application is now a genuine superset of §5.9 rather than an assumed one.
 
 ---
 

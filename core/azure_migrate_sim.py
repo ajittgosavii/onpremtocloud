@@ -809,6 +809,174 @@ LIMITATIONS: list[dict] = [
                    "is required. Usually it is not, and this limitation is acceptable.",
         affects="Multi-cloud strategies",
     ),
+
+    # ---- Limitations carried by the source assessment that this register
+    # ---- previously did not name. The database and source-configuration
+    # ---- entries above go deeper than the paper does; these are the ones it
+    # ---- has and this did not.
+    dict(
+        area="Replication", severity="Major",
+        limitation="Agentless replication borrows IOPS from the production SAN it is "
+                   "migrating off.",
+        detail="It works through VMware snapshots and changed block tracking, and both consume "
+               "storage IOPS and bandwidth on the source array. Microsoft explicitly advises "
+               "against agentless replication where storage or IOPS are constrained. On an "
+               "estate already close to its storage ceiling, the migration tooling degrades the "
+               "environment it is trying to move.",
+        impact="Production latency rises during replication windows, and the degradation is "
+               "blamed on the applications rather than on the migration.",
+        workaround="Baseline SAN IOPS headroom before wave one, schedule replication outside "
+                   "peak, and switch IOPS-sensitive workloads to agent-based replication.",
+        affects="Estates running close to their storage ceiling",
+    ),
+    dict(
+        area="Replication", severity="Major",
+        limitation="Changed block tracking is fragile, and pre-existing snapshots silently "
+                   "block it.",
+        detail="Documented failure modes include CBT being reset, disabled, or blocked by "
+               "snapshots already present on the source VM, plus errors surfacing from the "
+               "underlying VMware API during snapshot create, delete or consolidate. "
+               "Remediation usually means following a VMware knowledge base article, which puts "
+               "the fix outside the Azure Migrate support boundary.",
+        impact="Waves stall on a class of failure the migration team cannot fix inside its own "
+               "tooling or support contract.",
+        workaround="Audit the estate for pre-existing snapshots before replication begins. It is "
+                   "a common and easily avoided cause of wave delay.",
+        affects="VMs carrying old snapshots",
+    ),
+    dict(
+        area="Replication", severity="Major",
+        limitation="vMotion and Storage vMotion during active replication cause failures.",
+        detail="Moving a VM between hosts or datastores while an upload is in progress is not "
+               "reliably supported. In an environment with DRS enabled and aggressive "
+               "automation, this happens without anyone deciding it should.",
+        impact="Replication failures that appear random, because nobody associates them with an "
+               "automated DRS move that happened overnight.",
+        workaround="Agree the DRS automation level and datastore maintenance freeze windows with "
+                   "the VMware team for the duration of each wave.",
+        affects="Any cluster with DRS automation enabled",
+    ),
+    dict(
+        area="Target-specific", severity="Blocker",
+        limitation="There is no test migration for the Azure Local target.",
+        detail="The Azure Local workflow documents prepare, discover, replicate, migrate and "
+               "verify -- but provides no test migration action of the kind Azure IaaS waves "
+               "get. The first migration of a VM to Azure Local is therefore a real cutover for "
+               "that VM, not a rehearsal.",
+        impact="Migrating a subset of production VMs as a 'test' risks duplicate hostnames, "
+               "machine accounts, IP addresses, application node identity, certificates and "
+               "monitoring records colliding with production.",
+        workaround="Validate with purpose-built low-criticality canary workloads, never with a "
+                   "sample of real production servers, and treat replication completion as a "
+                   "transport milestone rather than service acceptance.",
+        affects="Every VM targeted at Azure Local",
+    ),
+    dict(
+        area="Target-specific", severity="Major",
+        limitation="Static IP preservation on Azure Local needs a separate, verified procedure.",
+        detail="A dedicated migration package captures the source NIC configuration and reapplies "
+               "it after migration through a startup task or scheduled job. The supported guest "
+               "matrix is specific, and preparation has to be verified by confirming the "
+               "generated configuration file, the scheduled task or cron job, and clean "
+               "collection logs -- before the wave, not after.",
+        impact="Addresses are lost at cutover on exactly the workloads whose addresses are "
+               "hard-coded somewhere else.",
+        workaround="Map DHCP interfaces to dynamic logical networks and static interfaces to "
+                   "static logical networks, confirm every static address falls inside the "
+                   "target network's range, and make that a hard wave entry criterion.",
+        affects="Statically addressed VMs targeted at Azure Local",
+    ),
+    dict(
+        area="Target-specific", severity="Major",
+        limitation="Migration to Azure Local and to Windows Server is not live.",
+        detail="There is no live or network migration path from VMware to these targets. Cutover "
+               "involves downtime and requires guest remediation afterwards -- re-IP, agent "
+               "removal, and verification of Secure Boot settings.",
+        impact="Downtime has to be negotiated with the application owner, and it is usually "
+               "discovered at the wave gate rather than at planning.",
+        workaround="Build the downtime into the application owner's change approval from the "
+                   "outset rather than negotiating it at the gate.",
+        affects="On-premises targets (Azure Local, Windows Server)",
+    ),
+    dict(
+        area="Dependency analysis", severity="Major",
+        limitation="Dependency mapping produces both false positives and false negatives.",
+        detail="Connections get flagged as dependencies that are incidental -- monitoring polls, "
+               "backup traffic, domain controller chatter -- while genuine dependencies never "
+               "appear because they occur outside the observation window or traverse a path the "
+               "collector cannot see.",
+        impact="Wave composition built on the map alone splits applications that must move "
+               "together and groups servers that have nothing to do with each other.",
+        workaround="Treat the map as a hypothesis and validate it with application owners. Never "
+                   "let it be the sole input to wave composition.",
+        affects="Wave and move-group planning",
+    ),
+    dict(
+        area="Dependency analysis", severity="Moderate",
+        limitation="The richer dependency analysis is neither free nor agentless.",
+        detail="Agentless mapping infers relationships from guest process data. Network-level "
+               "telemetry requires agents and a Log Analytics workspace, which brings deployment "
+               "effort, a change-approval cycle across the estate, and Log Analytics ingestion "
+               "charges beyond the free window.",
+        impact="The better data costs money and calendar time, so it gets skipped precisely on "
+               "the complex applications that need it most.",
+        workaround="Scope agent-based mapping to complex, high-criticality application groups "
+                   "rather than to the whole estate.",
+        affects="Complex application groups",
+    ),
+    dict(
+        area="Dependency analysis", severity="Major",
+        limitation="Nothing discovers undocumented dependencies at the application layer.",
+        detail="Hard-coded IP addresses in configuration files, hostname assumptions, embedded "
+               "connection strings, licence servers bound to a MAC address, scheduled tasks "
+               "running on other servers and file-share paths do not appear in network "
+               "telemetry at all.",
+        impact="The dependency that breaks the cutover is routinely one no tool could have seen.",
+        workaround="Pair every wave with an application-owner questionnaire. This is a programme "
+                   "activity, not a tool output.",
+        affects="Every application with configuration nobody has read recently",
+    ),
+    dict(
+        area="Programme operations", severity="Moderate",
+        limitation="Several of the most valuable capabilities are in public preview.",
+        detail="Reports, PostgreSQL and MongoDB assessment and the Copilot modernisation "
+               "integration have all been preview capabilities. Preview features change, and "
+               "they carry no production service level agreement.",
+        impact="A programme dependency on a preview capability can be withdrawn mid-flight, with "
+               "no contractual recourse.",
+        workaround="Do not build a critical programme dependency on a preview capability without "
+                   "a documented fallback.",
+        affects="Programmes relying on newer capabilities",
+    ),
+    dict(
+        area="Programme operations", severity="Moderate",
+        limitation="One Azure Migrate project migrates to a single Azure region.",
+        detail="A multi-region target architecture requires multiple projects, which fragments "
+               "reporting and complicates programme-level status. Some capabilities, notably "
+               "business case generation, are also available only in public cloud regions rather "
+               "than sovereign or government clouds.",
+        impact="Programme reporting has to be reassembled by hand across projects, and feature "
+               "availability differs by environment.",
+        workaround="Settle the target region architecture before creating projects, and confirm "
+                   "feature availability against the specific Azure environment early.",
+        affects="Multi-region and sovereign-cloud target architectures",
+    ),
+    dict(
+        area="Programme operations", severity="Major",
+        limitation="The appliance is a single point of failure for the wave.",
+        detail="It is the discovery and replication gateway. Appliance failure, credential "
+               "expiry, or loss of connectivity to Azure service endpoints stops the wave. The "
+               "vCenter service account also needs specific privileges applied at data centre, "
+               "cluster, host, VM and datastore level -- permissions applied at only one level "
+               "are a frequent cause of replication errors that present as something else.",
+        impact="A wave stops for a reason that looks like a product fault and is actually an "
+               "operations one.",
+        workaround="Monitor appliance health explicitly, document credential rotation, treat the "
+                   "appliance as a production system for the programme's duration, and validate "
+                   "vCenter permissions at every level during deployment rather than at first "
+                   "failure.",
+        affects="Every wave",
+    ),
 ]
 
 
