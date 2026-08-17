@@ -1,6 +1,10 @@
 # Audit: does the application say what the source paper says?
 
-**Status:** audit complete, nothing executed. Written 2026-08-17.
+**Status:** audit complete and **fully executed** on 2026-08-17, in commits
+`d3b0400`, `7f05754`, `316c3b9`, `bd05358`, `7ddb9c7`, `1b9d4ba`, `a4c9a90` and
+`b5468bb`. Every gap below is closed. Three of the "aligned" rows in the first
+pass turned out to be wrong on closer reading and are corrected in place --
+§5.9, §6.1 and §6.3. See *What was executed* at the end.
 **Question asked:** is the application aligned with the source paper, and does it
 present *all* the alternatives the paper assesses?
 
@@ -261,3 +265,72 @@ Stated so the coverage claim is honest.
   presence was confirmed.
 * **§10 references.** Not examined.
 * **Appendix C glossary.** Not examined.
+
+---
+
+## What was executed
+
+All eight items, in priority order, one commit each.
+
+| Commit | Item | What changed |
+|---|---|---|
+| `d3b0400` | 1 + 3 | Three missing options added (SUSE Harvester, XCP-ng/Vates, OpenStack) plus a six-entry evaluated-and-not-shortlisted register. Five scoring dimensions added, including `broadcom_exit` — the paper's only Critical criterion, previously unscored — and `exit_cost`. The paper's Critical/High/Medium bands exposed as `CRITERION_WEIGHT` and as a selectable weighting. |
+| `7f05754` | 2 | `core/risks.py`: R01–R15 with impact, mitigation and owner. Twelve scored against the live model, three advisory. Exit readiness moved to tabs to carry it. |
+| `316c3b9` | — | **Correction.** Twelve Azure Migrate limitations added (21 → 33), including a new Target-specific area for the three Azure Local gaps. See the §5.9 correction above. |
+| `bd05358` | 4 | Discovery data checklist, scored against the columns the loaded inventory actually carries. |
+| `7ddb9c7` | 5 | Decision checkpoints DC1–DC6 and the 30/60/90-day plan, as a fourth Exit readiness tab. |
+| `1b9d4ba` | 6 | Azure Migrate adoption checklist as a pre-flight gate; six of fifteen items checked against the live configuration. |
+| `a4c9a90` | 7 + 8 | Appendix B's thirteen renewal questions, downloadable as CSV. Platform scorecard split into the paper's three matrices. |
+| `b5468bb` | — | **Corrections.** §6.1 target state and §6.3 wave design principles (below), plus §7.2's missing egress line. |
+
+### Three rows this audit got wrong on the first pass
+
+Each was recorded as covered on the strength of a count or an engine behaviour,
+rather than a reading. The pattern is worth naming: **a count is not a check**,
+and "the engine does this" is not the same as "the application says this".
+
+1. **§5.9, Azure Migrate limitations.** Recorded as a superset because 21 > 14.
+   Nine of the paper's items were absent, including the entire Azure Local trio —
+   no test migration, static IP preservation, no live migration path — while the
+   application was simultaneously scoring Azure Local as a recommendable
+   destination. Corrected in `316c3b9`.
+2. **§6.1, target state.** Recorded as exact via §3.2's segmentation. It was not:
+   the application sent the Relocate segment to "AVS or **Azure Local**" where the
+   paper sends it to "AVS or **NC2 on Azure**", with the explicit rationale that
+   NC2 carries no Broadcom requirement and AVS does. The application was
+   contradicting its own central thesis. Corrected in `b5468bb`.
+3. **§6.3, wave design principles.** Recorded as "mostly" because the wave engine
+   already sequences by dependency cluster and sizes on disk count. True of the
+   engine, false of the application: none of the seven rules that decide whether a
+   wave may start appeared anywhere on screen — including that there is no
+   automated rollback, only source VMs held powered off for a period somebody has
+   to agree per wave. Corrected in `b5468bb`.
+
+### Coverage now
+
+| Paper section | Status |
+|---|---|
+| §3.1 Evaluation criteria (13) | All thirteen scored, with the paper's weight bands |
+| §3.2 Segmentation (6) | Exact |
+| §3.3 Underestimated costs (8) | Covered across the Scenario C lines and anti-patterns |
+| §3.4 Archetypes (5) | Exact |
+| §4.1–4.14 Alternatives (14) | All thirteen numbered options modelled; §4.14's six recorded |
+| §4.15 Matrices (3) | Split into the paper's three views |
+| §4.16 Anti-patterns (10) | All ten, seven mechanically tested |
+| §5.9 Limitations | 33 entries, a genuine superset |
+| §5.10 Supplementary tooling | Superset |
+| §5.11 Adoption checklist (15) | All fifteen, six auto-checked |
+| §6.1 Target state | Corrected to match, with rationale per segment |
+| §6.2 Phased roadmap (5) | All five |
+| §6.3 Wave principles (7) | All seven, four checked against the plan |
+| §7.1 Scenarios A/B/C | Built on one shared model |
+| §7.2 Scenario C cost lines (11) | Fourteen, including the egress line that was missing |
+| §7.3 Negotiation levers (7) | All seven |
+| §8 Risk register (15) | All fifteen, twelve scored live |
+| §9.1–9.3 Next 30/60/90 days | All three horizons |
+| §9.4 Decision checkpoints (6) | All six, with evidence and owner |
+| Appendix A Discovery checklist (15) | All fifteen, scored against the inventory |
+| Appendix B Renewal questions (13) | All thirteen, downloadable |
+
+Page count is unchanged at 13. Every addition landed as a tab or section on the
+page that already owned the subject.
