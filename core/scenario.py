@@ -213,6 +213,17 @@ def current() -> Result:
 
 
 def monte_carlo(res: Result, sc: Scenario) -> pd.DataFrame:
+    """Simulation for the active scenario, computed once per scenario.
+
+    Memoised on the same principle as ``current()``. This matters since the
+    simulation moved onto Business case as a tab: Streamlit executes every tab
+    body on every rerun, so without this the default 10,000 iterations would run
+    again each time somebody nudged an unrelated slider on another tab.
+    """
+    token = sc.key()
+    if st.session_state.get("_mc_token") == token and "_mc" in st.session_state:
+        return st.session_state["_mc"]
+
     det = montecarlo.Deterministic(
         migration_cost=res.effort_summary["migration_cost"],
         effort_hours=res.effort_summary["total_effort_hours"],
@@ -226,7 +237,10 @@ def monte_carlo(res: Result, sc: Scenario) -> pd.DataFrame:
         vm_count=int(res.estate_summary["vm_count"]),
         cost_per_vm=res.effort_summary["cost_per_vm"],
     )
-    return montecarlo.run(det, sc.mc)
+    sim = montecarlo.run(det, sc.mc)
+    st.session_state["_mc"] = sim
+    st.session_state["_mc_token"] = token
+    return sim
 
 
 def llm_state(res: Result, sc: Scenario) -> dict:

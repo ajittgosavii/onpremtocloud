@@ -32,12 +32,9 @@ PAGES = {
     "Estate discovery": "views/inventory.py",
     "Readiness & 7R": "views/assess.py",
     "Complexity & effort": "views/effort.py",
-    "Cloud provider": "views/provider.py",
     "Target platforms": "views/platform_options.py",
-    "Azure cost simulator": "views/cost.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",
-    "Risk simulation": "views/simulate.py",
     "Azure Migrate simulator": "views/azure_migrate.py",
     "Migration tooling": "views/tooling.py",
 }
@@ -142,53 +139,53 @@ def build(sc, res) -> pd.DataFrame:
     # ---- Commercial -------------------------------------------------------
     a += [
         Assumption("Commercial", "Azure region and currency",
-                   f"{com.region} / {com.currency}", CALIBRATE, "Azure cost simulator",
+                   f"{com.region} / {com.currency}", CALIBRATE, "Business case",
                    "Every price on every page", 1),
         Assumption("Commercial", "Azure unit prices", "Live from the Retail Prices API",
-                   VENDOR, "Azure cost simulator",
+                   VENDOR, "Business case",
                    "Compute, storage, backup, DR and egress cost", 3,
                    "Not adjustable. Microsoft's own published retail rates."),
         Assumption("Commercial", "Compute commitment",
                    {"none": "Pay-as-you-go", "ri-1y": "Reserved Instance 1yr",
                     "ri-3y": "Reserved Instance 3yr", "sp-1y": "Savings plan 1yr",
                     "sp-3y": "Savings plan 3yr"}.get(com.commitment, com.commitment),
-                   CALIBRATE, "Azure cost simulator", "20-40% of the compute bill", 1,
+                   CALIBRATE, "Business case", "20-40% of the compute bill", 1,
                    "A contractual commitment. Confirm the client will actually sign it."),
         Assumption("Commercial", "Commitment coverage of production",
-                   f"{com.commitment_coverage_pct:.0f}%", CALIBRATE, "Azure cost simulator",
+                   f"{com.commitment_coverage_pct:.0f}%", CALIBRATE, "Business case",
                    "Compute cost, and the risk of paying for unused reservations", 2),
         Assumption("Commercial", "Azure Hybrid Benefit applied",
                    f"{'Yes' if com.apply_ahb_windows else 'No'}"
                    + (f", {com.ahb_coverage_pct:.0f}% of Windows VMs"
                       if com.apply_ahb_windows else ""),
-                   CALIBRATE, "Azure cost simulator",
+                   CALIBRATE, "Business case",
                    "The Windows licence line, and the provider recommendation", 1,
                    "Depends entirely on whether the client holds Software Assurance. Verify "
                    "before this saving appears in a business case."),
         Assumption("Commercial", "Non-production scheduling",
                    f"{com.nonprod_hours_per_week:.0f} h/week" if com.nonprod_schedule
                    else "Not scheduled -- 24x7",
-                   CALIBRATE, "Azure cost simulator", "Non-production compute cost", 1,
+                   CALIBRATE, "Business case", "Non-production compute cost", 1,
                    "Requires an operational commitment. Many organisations plan it and never "
                    "implement it."),
         Assumption("Commercial", "Landing zone overhead",
                    f"{com.platform_overhead_pct:.0f}% uplift", JUDGEMENT,
-                   "Azure cost simulator",
+                   "Business case",
                    "Hub network, firewall, bastion, Log Analytics, Defender", 2,
                    "Azure Migrate's own estimate excludes all of this."),
         Assumption("Commercial", "Monthly internet egress",
-                   f"{com.monthly_egress_gb:,.0f} GB", CALIBRATE, "Azure cost simulator",
+                   f"{com.monthly_egress_gb:,.0f} GB", CALIBRATE, "Business case",
                    "Egress cost", 2,
                    "Almost never known up front. Measure it at the perimeter before go-live."),
         Assumption("Commercial", "Negotiated EA/CSP discount",
-                   f"{com.negotiated_discount_pct:.1f}%", CALIBRATE, "Azure cost simulator",
+                   f"{com.negotiated_discount_pct:.1f}%", CALIBRATE, "Business case",
                    "Every Azure cost line", 1,
                    "Retail rates are the starting point. Enterprise customers rarely pay them."),
         Assumption("Commercial", "Backup and DR",
                    f"Backup {'on' if com.backup_enabled else 'off'} "
                    f"({com.backup_redundancy}), DR "
                    f"{com.dr_coverage if com.dr_enabled else 'off'}",
-                   CALIBRATE, "Azure cost simulator", "Protection cost", 2),
+                   CALIBRATE, "Business case", "Protection cost", 2),
     ]
 
     # ---- Effort -----------------------------------------------------------
@@ -306,7 +303,7 @@ def build(sc, res) -> pd.DataFrame:
                    f"{ti.residual_onprem_pct_after_migration:.0f}%", CALIBRATE,
                    "Business case", "Whether the saving is ever fully realised", 2),
         Assumption("Financial", "Extended Security Updates per server per year",
-                   "Assumption in the provider comparison", CALIBRATE, "Cloud provider",
+                   "Assumption in the why-Azure comparison", CALIBRATE, "Business case",
                    "The non-Azure licensing penalty", 2),
     ]
 
@@ -314,12 +311,12 @@ def build(sc, res) -> pd.DataFrame:
     a += [
         Assumption("Risk", "Monte Carlo driver ranges",
                    f"{sc.mc.iterations:,} iterations, 11 PERT drivers", JUDGEMENT,
-                   "Risk simulation", "The confidence bands and the funding recommendation", 2,
+                   "Business case", "The confidence bands and the funding recommendation", 2,
                    "The three-point ranges are where the honesty lives. Widen them if the "
                    "estate is poorly understood."),
         Assumption("Risk", "Budget and deadline targets",
                    f"{_money(sc.budget_target, cur)} / {sc.deadline_months:.0f} months",
-                   CALIBRATE, "Risk simulation", "The probability statements", 1),
+                   CALIBRATE, "Business case", "The probability statements", 1),
     ]
 
     df = pd.DataFrame([{

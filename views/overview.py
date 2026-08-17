@@ -249,7 +249,8 @@ with c1:
             "Azure prices, SKU specifications, managed-disk tiers, reserved instance and "
             "savings plan rates, and every published Azure Migrate product limit. These come "
             "from Microsoft's own API and documentation, fetched live.")
-        ui.page_link("views/cost.py", "See the live rate feed", ":material/payments:")
+        ui.page_link("views/business_case.py", "See the live rate feed",
+                     ":material/payments:")
 with c2:
     with st.container(border=True):
         st.markdown(

@@ -1,12 +1,27 @@
-"""Business case: staying on VMware versus migrating to Azure."""
+"""Business case: staying on VMware versus migrating to Azure.
+
+This page absorbed three former pages, because none of them was a destination in
+the exit narrative on its own:
+
+* **Azure cost simulator** -- the commercial levers (reservations, savings plans,
+  Hybrid Benefit, non-production scheduling) are inputs to the case, not an
+  answer, so they live on the *Cost levers* tab.
+* **Risk simulation** -- a Monte Carlo over the programme is a confidence
+  statement about this case, so it lives on the *Confidence* tab.
+* **Cloud provider** -- cut, because the destination is settled. The two findings
+  worth keeping are the "why Azure" panel below.
+"""
 
 from dataclasses import replace
 
+import numpy as np
 import pandas as pd
+import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import scenario, tco, ui
+from core import azure_catalog as cat
+from core import costing, montecarlo, providers, scenario, tco, ui
 
 sc = scenario.get_scenario()
 res = scenario.current()
@@ -148,8 +163,98 @@ ui.takeaway(
     "<b>Sensitivity</b> tab unprompted; a case that survives having its assumptions attacked "
     "in front of the client is worth far more than one that is merely presented.")
 
-tab_cash, tab_onprem, tab_azure, tab_sens = st.tabs(
-    ["Cash flow", "Current-state cost base", "Azure cost base", "Sensitivity"])
+
+# ==========================================================================
+# Why Azure, in one panel.
+#
+# Salvaged from the former Cloud provider page, which was cut because the
+# destination is already settled and a hyperscaler bake-off reopens it. These
+# two findings survive because they pre-empt the question a CFO does ask -
+# "did you check the others?" - without re-running the selection.
+# ==========================================================================
+ui.section(
+    "Why Azure",
+    "Not a provider selection - that decision is made. This is the answer to "
+    "\"did anyone check?\", in two numbers.")
+
+est, sized = res.estate, res.sized
+_s = res.estate_summary
+
+azure_prem = 0.046
+if len(res.price_book.vm):
+    _row = res.price_book.vm[res.price_book.vm["arm_sku_name"] == "Standard_D4s_v5"]
+    if len(_row) and pd.notna(_row.iloc[0]["win_licence_hr"]):
+        azure_prem = float(_row.iloc[0]["win_licence_hr"]) / 4
+
+aws_prem, aws_live = 0.046, False
+try:
+    aws_prem = providers.aws_windows_premium(sc.commercial.region,
+                                             live=sc.live_pricing)["per_vcpu_hr"]
+    aws_live = True
+except Exception:
+    pass
+
+_lic_inputs = dict(
+    windows_vcpu=int(sized[sized["os_family"] == "Windows"]["azure_vcpu"].sum()),
+    windows_vms=int((est["os_family"] == "Windows").sum()),
+    sql_vms=int((est["db_engine"] == "Microsoft SQL Server").sum()),
+    eol_windows_vms=int(((est["os_family"] == "Windows") & est["os_eol"]).sum()),
+    oracle_vms=int((est["db_engine"] == "Oracle Database").sum()),
+    linux_vcpu=int(sized[sized["os_family"] == "Linux"]["azure_vcpu"].sum()),
+    total_vcpu=int(sized["azure_vcpu"].sum()),
+    azure_windows_premium_per_vcpu_hr=azure_prem,
+    aws_windows_premium_per_vcpu_hr=aws_prem,
+    esu_per_vm_year=providers.ESU_PER_VM_YEAR,
+)
+lic_sa = providers.licensing_comparison(
+    providers.LicensingInputs(owns_software_assurance=True, **_lic_inputs))
+lic_no_sa = providers.licensing_comparison(
+    providers.LicensingInputs(owns_software_assurance=False, **_lic_inputs))
+
+
+def _annual(frame: pd.DataFrame, key: str) -> float:
+    row = frame[frame["key"] == key]
+    return float(row.iloc[0]["total_annual"]) if len(row) else 0.0
+
+
+_gap_sa = _annual(lic_sa, "aws") - _annual(lic_sa, "azure")
+_best_no_sa = lic_no_sa.iloc[0]
+
+ui.metric_row([
+    ("Windows licence, Azure", f"{ui.money(azure_prem, cur, 4)}/vCPU/hr",
+     "live retail rate"),
+    ("Windows licence, AWS", f"{ui.money(aws_prem, cur, 4)}/vCPU/hr",
+     "live feed" if aws_live else "published list price"),
+    ("Difference on compute", f"{abs(aws_prem - azure_prem) / max(azure_prem, 1e-9) * 100:.1f}%",
+     "the case is not cheaper cores"),
+    ("Azure advantage, with SA", f"{ui.compact_money(_gap_sa, cur)}/yr",
+     "Hybrid Benefit + free ESU"),
+    ("Cheapest without SA", str(_best_no_sa["provider"]),
+     f"{ui.compact_money(float(_best_no_sa['total_annual']), cur)}/yr"),
+], tones=["", "", "", "pos", "warn" if _best_no_sa["key"] != "azure" else ""])
+
+_no_sa_note = (
+    f"<b>Without Software Assurance the advantage narrows sharply</b> - on this estate "
+    f"{_best_no_sa['provider']} comes out cheapest on licensing alone "
+    f"({ui.compact_money(float(_best_no_sa['total_annual']), cur)} against "
+    f"{ui.compact_money(_annual(lic_no_sa, 'azure'), cur)} for Azure). Confirm the client "
+    "actually holds SA before any Hybrid Benefit saving enters this case."
+    if _best_no_sa["key"] != "azure" else
+    "Azure stays cheapest on licensing even without Software Assurance on this estate, but "
+    "the margin is thin - confirm the SA position rather than assuming it.")
+
+ui.note(
+    f"<b>Azure and AWS charge within {abs(aws_prem - azure_prem) / max(azure_prem, 1e-9) * 100:.1f}% "
+    "of each other for licence-included Windows compute.</b> So the Azure case is not cheaper "
+    "cores - it is that Azure is the only provider allowing bring-your-own-licence on ordinary "
+    "shared tenancy, and the only one giving free Extended Security Updates for end-of-life "
+    "Windows. Both of those depend on Software Assurance.")
+ui.note(_no_sa_note, "warn")
+
+# ==========================================================================
+tab_cash, tab_onprem, tab_azure, tab_levers, tab_conf, tab_sens = st.tabs(
+    ["Cash flow", "Current-state cost base", "Azure cost base", "Cost levers",
+     "Confidence", "Sensitivity"])
 
 # --------------------------------------------------------------------------
 with tab_cash:
@@ -280,6 +385,90 @@ with tab_azure:
                                       "share_pct": "Share", "basis": "Basis"}),
                  hide_index=True, width="stretch")
 
+    # ---- monthly run rate, from the former cost simulator -----------------
+    ui.section("The monthly run rate underneath it",
+               "The annual figure above is this, times twelve, plus the platform lines. "
+               "Priced against live Azure retail rates for "
+               f"{cat.REGIONS[sc.commercial.region]['label']}.")
+    st.markdown(ui.pricing_badge(res.price_book.source)
+                + f"<span class='pill'>{res.cost_summary['priced_from_api_pct']:.0f}% of VMs "
+                  "matched to a live meter</span>"
+                + f"<span class='pill'>{len(res.price_book.vm):,} VM meters</span>"
+                + f"<span class='pill'>{len(res.price_book.disk):,} disk meters</span>",
+                unsafe_allow_html=True)
+
+    cs = res.cost_summary
+    ui.metric_row([
+        ("Monthly Azure run rate", ui.money(cs["monthly_total"], cur),
+         f"{ui.compact_money(cs['annual_total'], cur)} per year"),
+        ("Unoptimised baseline", ui.money(cs["baseline_monthly"], cur),
+         f"-{cs['monthly_saving'] / cs['baseline_monthly'] * 100:.0f}% with levers"),
+        ("Average per VM", ui.money(cs["avg_cost_per_vm"], cur, 2),
+         f"{cs['vms_costed']:,} VMs costed"),
+        ("Avoided by retiring", f"{ui.compact_money(cs['retire_saving_monthly'], cur)}/mo",
+         f"{cs['vms_retired']} VMs"),
+        ("On-premises today", ui.money(res.onprem_monthly, cur),
+         f"{(cs['monthly_total'] - res.onprem_monthly) / res.onprem_monthly * 100:+.0f}%"),
+    ])
+
+    c1, c2 = st.columns([1.4, 1])
+    with c1:
+        comp = res.cost_breakdown
+        fig = go.Figure(go.Bar(
+            x=comp["monthly_cost"], y=comp["component"], orientation="h",
+            marker_color=ui.PALETTE[0],
+            text=[f"{ui.compact_money(v, cur)}  ({p:.0f}%)"
+                  for v, p in zip(comp["monthly_cost"], comp["share_pct"])],
+            textposition="auto"))
+        fig.update_layout(height=380, title="Monthly cost by component",
+                          xaxis_title=f"{cur}/month", yaxis=dict(autorange="reversed"))
+        st.plotly_chart(fig, width="stretch")
+    with c2:
+        st.plotly_chart(ui.donut(comp["component"], comp["monthly_cost"], height=380),
+                        width="stretch")
+
+    st.markdown("### Cost by dimension")
+    dim = st.selectbox("Group by", ["environment", "criticality", "tier", "strategy",
+                                    "os_family", "azure_series", "app_name", "cluster"])
+    live = res.sized[res.sized["strategy"] != "Retire"]
+    g = (live.groupby(dim).agg(vms=("vm_name", "count"),
+                               monthly=("monthly_cost", "sum"),
+                               compute=("compute_cost", "sum"),
+                               storage=("storage_cost", "sum"))
+         .reset_index().sort_values("monthly", ascending=False))
+    g["per_vm"] = g["monthly"] / g["vms"]
+    fig = px.bar(g.head(20), x=dim, y="monthly", color=dim,
+                 color_discrete_sequence=ui.PALETTE, title=f"Monthly cost by {dim}")
+    fig.update_layout(height=360, showlegend=False, yaxis_title=f"{cur}/month", xaxis_title="")
+    st.plotly_chart(fig, width="stretch")
+    st.dataframe(g.head(30).round(2), hide_index=True, width="stretch")
+
+    st.markdown("### Where the spend concentrates")
+    live = live.sort_values("monthly_cost", ascending=False).copy()
+    live["cum_pct"] = live["monthly_cost"].cumsum() / live["monthly_cost"].sum() * 100
+    n80 = int((live["cum_pct"] <= 80).sum()) + 1
+    ui.note(
+        f"<b>{n80} VMs ({n80 / len(live) * 100:.0f}% of the estate) account for 80% of the "
+        "Azure bill.</b> Optimisation effort belongs there. The long tail is where automation "
+        "and standard patterns belong.")
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=list(range(1, len(live) + 1)), y=live["cum_pct"],
+                             mode="lines", line=dict(width=3, color=ui.PALETTE[0]),
+                             name="Cumulative cost"))
+    fig.add_hline(y=80, line_dash="dash", line_color="rgba(180,73,95,.7)",
+                  annotation_text="80% of spend")
+    fig.update_layout(height=340, title="Cost concentration",
+                      xaxis_title="VMs ranked by cost", yaxis_title="Cumulative % of spend")
+    st.plotly_chart(fig, width="stretch")
+
+    st.markdown("**Most expensive VMs**")
+    st.dataframe(live.head(30)[["vm_name", "app_name", "environment", "azure_sku", "azure_vcpu",
+                                "azure_ram_gib", "total_alloc_gib", "compute_cost",
+                                "storage_cost", "monthly_cost"]].round(2),
+                 hide_index=True, width="stretch", height=420)
+    ui.df_download(live, "azure_costs_per_vm.csv", "Download full per-VM costing")
+
     st.markdown("### Headcount change")
     hc = pd.DataFrame([
         {"Role": "Infrastructure staff on the VMware platform",
@@ -296,6 +485,381 @@ with tab_azure:
         "Treat the headcount line carefully. Migration rarely removes people - it changes what "
         "they do. If the business case depends on a reduction that nobody intends to make, it "
         "will not survive contact with the CFO.")
+
+# --------------------------------------------------------------------------
+# Cost levers -- the former Azure cost simulator. These are inputs to the case
+# above, which is why they sit inside it rather than beside it in the narrative.
+# --------------------------------------------------------------------------
+with tab_levers:
+    st.caption("Every lever here reprices the whole estate against live Azure retail rates, so "
+               "the NPV at the top of this page moves as you change them.")
+
+    with st.expander("Commercial levers", expanded=True):
+        p = sc.commercial
+        c1, c2, c3, c4 = st.columns(4)
+        commitment = c1.selectbox(
+            "Compute commitment", ["none", "ri-1y", "ri-3y", "sp-1y", "sp-3y"],
+            index=["none", "ri-1y", "ri-3y", "sp-1y", "sp-3y"].index(p.commitment),
+            format_func=lambda v: {"none": "Pay-as-you-go", "ri-1y": "Reserved Instance, 1 year",
+                                   "ri-3y": "Reserved Instance, 3 year",
+                                   "sp-1y": "Savings plan, 1 year",
+                                   "sp-3y": "Savings plan, 3 year"}[v],
+            help="Reservations are cheaper but lock to a VM family and region. Savings plans "
+                 "are slightly dearer and far more flexible.")
+        coverage = c2.slider("Commitment coverage of production (%)", 0, 100,
+                             int(p.commitment_coverage_pct),
+                             help="Committing 100% of a portfolio you are still migrating is "
+                                  "how organisations end up paying for unused reservations.")
+        ahb = c3.toggle("Azure Hybrid Benefit", p.apply_ahb_windows,
+                        help="Removes the Windows Server licence component for VMs covered by "
+                             "Software Assurance.")
+        ahb_cov = c4.slider("Windows VMs with eligible SA (%)", 0, 100, int(p.ahb_coverage_pct),
+                            disabled=not ahb)
+
+        c5, c6, c7, c8 = st.columns(4)
+        sched = c5.toggle("Schedule non-production off-hours", p.nonprod_schedule)
+        hours = c6.slider("Non-production hours per week", 20, 168,
+                          int(p.nonprod_hours_per_week), disabled=not sched,
+                          help="168 is 24x7. 55 is roughly 11 hours a day, five days a week.")
+        backup = c7.toggle("Azure Backup enabled", p.backup_enabled)
+        redundancy = c8.selectbox("Vault redundancy", ["GRS", "LRS"],
+                                  index=0 if p.backup_redundancy == "GRS" else 1,
+                                  disabled=not backup)
+
+        c9, c10, c11, c12 = st.columns(4)
+        dr = c9.toggle("Disaster recovery (Site Recovery)", p.dr_enabled)
+        dr_cov = c10.selectbox("DR coverage",
+                               ["Tier 0 only", "Tier 0 + Tier 1", "All production"],
+                               index=["Tier 0 only", "Tier 0 + Tier 1",
+                                      "All production"].index(p.dr_coverage),
+                               disabled=not dr)
+        overhead = c11.slider("Landing zone overhead (%)", 0, 30, int(p.platform_overhead_pct),
+                              help="Hub network, firewall, bastion, private endpoints, Log "
+                                   "Analytics, Defender for Cloud and management VMs. Azure "
+                                   "Migrate's own estimate excludes all of this.")
+        discount = c12.slider("Negotiated EA / CSP discount (%)", 0.0, 25.0,
+                              float(p.negotiated_discount_pct), 0.5)
+
+        egress = st.slider("Monthly internet egress (GB)", 0, 100000,
+                           int(p.monthly_egress_gb), step=500,
+                           help=f"Charged at {ui.money(res.price_book.egress_gb, cur, 3)}/GB "
+                                "above the free 100 GB, from the live API.")
+
+        new = replace(p, commitment=commitment, commitment_coverage_pct=float(coverage),
+                      apply_ahb_windows=ahb, ahb_coverage_pct=float(ahb_cov),
+                      nonprod_schedule=sched, nonprod_hours_per_week=float(hours),
+                      backup_enabled=backup, backup_redundancy=redundancy,
+                      dr_enabled=dr, dr_coverage=dr_cov,
+                      platform_overhead_pct=float(overhead),
+                      negotiated_discount_pct=float(discount),
+                      monthly_egress_gb=float(egress))
+        if new != p:
+            scenario.update(commercial=new)
+            st.rerun()
+
+    st.markdown("### What each lever is actually worth")
+    st.caption("Each row turns one lever off and reprices the whole estate. The delta is what "
+               "that lever contributes to the plan.")
+    lev = costing.lever_sensitivity(res.sized, res.price_book, sc.commercial)
+    lev_disp = lev.copy()
+    lev_disp["monthly_cost"] = lev_disp["monthly_cost"].map(lambda v: ui.money(v, cur))
+    lev_disp["delta_vs_plan"] = lev.apply(
+        lambda r: f"{'+' if r['delta_vs_plan'] >= 0 else '-'}"
+                  f"{ui.money(abs(r['delta_vs_plan']), cur)} ({r['delta_pct']:+.1f}%)", axis=1)
+    st.dataframe(lev_disp[["lever", "monthly_cost", "delta_vs_plan"]].rename(
+        columns={"lever": "If this lever were removed", "monthly_cost": "Monthly cost",
+                 "delta_vs_plan": "Change vs the current plan"}),
+        hide_index=True, width="stretch")
+
+    fig = go.Figure(go.Bar(
+        x=lev["delta_vs_plan"], y=lev["lever"], orientation="h",
+        marker_color=[ui.PALETTE[3] if v > 0 else ui.PALETTE[2] for v in lev["delta_vs_plan"]],
+        text=[ui.compact_money(v, cur) for v in lev["delta_vs_plan"]], textposition="auto"))
+    fig.update_layout(height=300, title="Monthly cost impact of removing each lever",
+                      xaxis_title=f"{cur}/month", yaxis=dict(autorange="reversed"))
+    st.plotly_chart(fig, width="stretch")
+
+    ui.note(
+        "Two of these are decisions, not switches. Reservations and savings plans are "
+        "contractual commitments that are painful to unwind, so the coverage percentage "
+        "should follow the migration curve rather than being set at 100% on day one. Azure "
+        "Hybrid Benefit depends on Software Assurance the client may or may not hold - "
+        "confirm it before the saving appears in a business case.")
+
+    st.markdown("### Commitment term comparison")
+    rows = []
+    for c in ["none", "ri-1y", "ri-3y", "sp-1y", "sp-3y"]:
+        pol = replace(sc.commercial, commitment=c,
+                      commitment_coverage_pct=(0 if c == "none"
+                                               else sc.commercial.commitment_coverage_pct))
+        tbl = costing.compute_costs(res.sized, res.price_book, pol)
+        rows.append({"Commitment": {"none": "Pay-as-you-go", "ri-1y": "RI 1 year",
+                                    "ri-3y": "RI 3 year", "sp-1y": "Savings plan 1 year",
+                                    "sp-3y": "Savings plan 3 year"}[c],
+                     "Monthly cost": tbl[tbl["strategy"] != "Retire"]["monthly_cost"].sum()})
+    cdf = pd.DataFrame(rows)
+    base_payg = cdf.loc[cdf["Commitment"] == "Pay-as-you-go", "Monthly cost"].iloc[0]
+    cdf["Saving vs PAYG"] = (base_payg - cdf["Monthly cost"]) / base_payg * 100
+    st.dataframe(
+        cdf.assign(**{"Monthly cost": cdf["Monthly cost"].map(lambda v: ui.money(v, cur)),
+                      "Saving vs PAYG": cdf["Saving vs PAYG"].map(lambda v: f"{v:.1f}%")}),
+        hide_index=True, width="stretch")
+
+    # ---- the live feed itself ---------------------------------------------
+    ui.section("Where these rates come from",
+               "Worth opening when someone asks. Every rate is Microsoft's own published "
+               "retail price, fetched from a public API a few seconds ago - not a "
+               "spreadsheet someone maintained last quarter.")
+    st.caption(
+        "`https://prices.azure.com/api/retail/prices` (api-version 2023-01-01-preview). "
+        "Unauthenticated. Cached locally for 24 hours so the app keeps working offline.")
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Virtual machine rates** (per hour)")
+        vm = res.price_book.vm.copy()
+        used = set(res.sized["azure_sku"].unique())
+        vm["in_plan"] = vm["arm_sku_name"].isin(used)
+        vm = vm.sort_values(["in_plan", "linux_hr"], ascending=[False, True])
+        st.dataframe(
+            vm[["arm_sku_name", "linux_hr", "windows_hr", "win_licence_hr", "in_plan"]]
+            .rename(columns={"arm_sku_name": "SKU", "linux_hr": "Linux",
+                             "windows_hr": "Windows", "win_licence_hr": "Windows licence",
+                             "in_plan": "Used in this plan"}).round(4),
+            hide_index=True, width="stretch", height=340)
+    with c2:
+        st.markdown("**Managed disk rates** (per month)")
+        st.dataframe(res.price_book.disk.rename(
+            columns={"kind": "Disk type", "tier": "Tier", "price_month": "Monthly",
+                     "price_per_10k_ops": "Per 10k operations"}).round(4),
+            hide_index=True, width="stretch", height=340)
+
+    st.markdown("**Other live rates**")
+    st.dataframe(pd.DataFrame([
+        {"Meter": "Internet egress (above the free 100 GB)",
+         "Rate": f"{ui.money(res.price_book.egress_gb, cur, 4)} per GB"},
+        {"Meter": "Azure Backup protected instance (per 500 GB block)",
+         "Rate": f"{ui.money(res.price_book.backup['instance_month'], cur, 2)} per month"},
+        {"Meter": "Azure Backup, SQL Server in an Azure VM",
+         "Rate": f"{ui.money(res.price_book.backup['sql_instance_month'], cur, 2)} per month"},
+        {"Meter": "Backup vault storage, LRS",
+         "Rate": f"{ui.money(res.price_book.backup['lrs_gb_month'], cur, 4)} per GB/month"},
+        {"Meter": "Backup vault storage, GRS",
+         "Rate": f"{ui.money(res.price_book.backup['grs_gb_month'], cur, 4)} per GB/month"},
+        {"Meter": "Azure Site Recovery, VM replicated to Azure",
+         "Rate": f"{ui.money(res.price_book.asr_instance, cur, 2)} per instance/month "
+                 "(free for the first 180 days when used for migration)"},
+    ]), hide_index=True, width="stretch")
+
+    if st.button("Force a refresh from the vendor API"):
+        st.cache_data.clear()
+        st.session_state.pop("_pipeline_token", None)
+        st.session_state.pop("_mc_token", None)
+        st.rerun()
+
+# --------------------------------------------------------------------------
+# Confidence -- the former Risk simulation page. A Monte Carlo over the
+# programme is a statement about how much to trust the case above, not a
+# destination of its own, so it ends up here rather than closing the Plan act.
+# --------------------------------------------------------------------------
+with tab_conf:
+    st.caption("A single-point estimate is the least useful thing you can hand a steering "
+               "committee. This runs the plan thousands of times with every uncertain input "
+               "sampled from a three-point estimate, and reports the confidence bands - plus "
+               "which uncertainty is actually driving the spread.")
+
+    with st.expander("Uncertainty ranges", expanded=False):
+        st.caption("Each driver is a PERT three-point estimate: optimistic, most likely, "
+                   "pessimistic. The most likely value is the deterministic plan's assumption.")
+        inp = sc.mc
+        new_fields = {}
+        fields = [f for f in montecarlo.DRIVER_LABELS if hasattr(inp, f)]
+        for chunk in [fields[i:i + 2] for i in range(0, len(fields), 2)]:
+            cols = st.columns(len(chunk) * 3)
+            for i, f in enumerate(chunk):
+                u = getattr(inp, f)
+                label = montecarlo.DRIVER_LABELS[f]
+                step = 0.05 if u.high <= 5 else (0.5 if u.high <= 100 else 500.0)
+                lo = cols[i * 3].number_input(f"{label} - low", value=float(u.low),
+                                              step=step, key=f"mc_{f}_lo")
+                mo = cols[i * 3 + 1].number_input("most likely", value=float(u.mode),
+                                                  step=step, key=f"mc_{f}_mo")
+                hi = cols[i * 3 + 2].number_input("high", value=float(u.high),
+                                                  step=step, key=f"mc_{f}_hi")
+                if (lo, mo, hi) != (u.low, u.mode, u.high):
+                    new_fields[f] = montecarlo.Uncertainty(lo, mo, hi)
+
+        c1, c2, c3, c4 = st.columns(4)
+        iters = c1.select_slider("Iterations", [1000, 2500, 5000, 10000, 25000, 50000],
+                                 value=inp.iterations)
+        seed = c2.number_input("Seed", 1, 10**6, inp.seed)
+        budget = c3.number_input("Budget target", 0.0, 1e9, float(sc.budget_target), 100000.0)
+        deadline = c4.number_input("Deadline (months)", 1.0, 120.0,
+                                   float(sc.deadline_months), 1.0)
+
+        if new_fields or iters != inp.iterations or seed != inp.seed:
+            scenario.update(mc=replace(inp, iterations=int(iters), seed=int(seed), **new_fields))
+            st.rerun()
+        if budget != sc.budget_target or deadline != sc.deadline_months:
+            scenario.update(budget_target=float(budget), deadline_months=float(deadline))
+            st.rerun()
+
+    with st.spinner(f"Running {sc.mc.iterations:,} iterations..."):
+        sim = scenario.monte_carlo(res, sc)
+    pct = montecarlo.percentiles(sim)
+    st.session_state["mc_percentiles"] = pct.to_dict("records")
+
+    # Named _q rather than p: this page already binds `p` to the commercial
+    # policy in the Cost levers tab above.
+    def _q(metric: str, q: int) -> float:
+        row = pct[pct["metric"] == metric]
+        return float(row[f"P{q}"].iloc[0]) if len(row) else 0.0
+
+    ui.metric_row([
+        ("Programme cost P50", ui.compact_money(_q("total_programme_cost", 50), cur), "median"),
+        ("Programme cost P80", ui.compact_money(_q("total_programme_cost", 80), cur),
+         f"+{(_q('total_programme_cost', 80) / max(_q('total_programme_cost', 50), 1) - 1) * 100:.0f}% "
+         "contingency"),
+        ("Duration P50", f"{_q('elapsed_months', 50):.1f} mo", "median"),
+        ("Duration P80", f"{_q('elapsed_months', 80):.1f} mo", None),
+        ("Azure run rate P80", f"{ui.compact_money(_q('azure_monthly_cost', 80), cur)}/mo", None),
+    ])
+
+    for line in montecarlo.confidence_statement(sim, sc.budget_target, sc.deadline_months):
+        prob_ok = "Below 80% confidence" not in line and "not credible" not in line
+        ui.note(line, "note" if prob_ok else "warn")
+
+    ui.note(
+        "<b>Never present the P50.</b> It is a coin flip, and a steering committee funded to "
+        "the median spends the second half of the programme asking for more money. Quote the "
+        "P80 and say plainly that it includes contingency - then show the tornado below, which "
+        "names the one uncertainty worth spending money to narrow.", "warn")
+
+    st.markdown("### Distributions")
+    c1, c2 = st.columns(2)
+    for col, (metric, title) in zip(
+            [c1, c2],
+            [("total_programme_cost", "Total programme cost"),
+             ("elapsed_months", "Elapsed duration (months)")]):
+        with col:
+            vals = sim[metric]
+            fig = go.Figure()
+            fig.add_trace(go.Histogram(x=vals, nbinsx=60, marker_color=ui.PALETTE[0],
+                                       opacity=0.85, name=title))
+            for q, colour in [(50, ui.PALETTE[2]), (80, ui.PALETTE[1]), (95, ui.PALETTE[3])]:
+                fig.add_vline(x=np.percentile(vals, q), line_dash="dash", line_color=colour,
+                              annotation_text=f"P{q}", annotation_position="top")
+            fig.update_layout(height=380, title=title, showlegend=False,
+                              xaxis_title="", yaxis_title="Iterations")
+            st.plotly_chart(fig, width="stretch")
+
+    st.markdown("### Cost versus duration")
+    samp = sim.sample(min(4000, len(sim)), random_state=1)
+    fig = go.Figure(go.Scattergl(
+        x=samp["elapsed_months"], y=samp["total_programme_cost"], mode="markers",
+        marker=dict(size=4, color=samp["effort_multiplier"], colorscale="Blues",
+                    showscale=True, colorbar=dict(title="Effort<br>multiplier")),
+        name="Iterations"))
+    fig.add_vline(x=sc.deadline_months, line_dash="dash", line_color=ui.PALETTE[3],
+                  annotation_text="Deadline")
+    fig.add_hline(y=sc.budget_target, line_dash="dash", line_color=ui.PALETTE[3],
+                  annotation_text="Budget")
+    fig.update_layout(height=430, xaxis_title="Elapsed months",
+                      yaxis_title=f"Total programme cost ({cur})")
+    st.plotly_chart(fig, width="stretch")
+    inside = float(((sim["elapsed_months"] <= sc.deadline_months)
+                    & (sim["total_programme_cost"] <= sc.budget_target)).mean() * 100)
+    ui.note(f"<b>{inside:.0f}% of iterations land inside both the budget and the deadline.</b> "
+            "The bottom-left quadrant is the only one that counts.",
+            "note" if inside >= 60 else "warn")
+
+    st.markdown("### What drives the spread")
+    target = st.selectbox(
+        "Outcome to analyse",
+        ["total_programme_cost", "elapsed_months", "migration_cost", "year1_total"],
+        format_func=lambda v: {"total_programme_cost": "Total programme cost",
+                               "elapsed_months": "Elapsed duration",
+                               "migration_cost": "One-off migration cost",
+                               "year1_total": "Year 1 total cost"}[v])
+    tor = montecarlo.tornado(sim, target)
+    fig = go.Figure(go.Bar(
+        x=tor["swing"], y=tor["driver"], orientation="h",
+        marker_color=[ui.PALETTE[3] if v > 0 else ui.PALETTE[2] for v in tor["swing"]],
+        text=[ui.compact_money(v, cur) if "cost" in target or "total" in target
+              else f"{v:+.1f}" for v in tor["swing"]],
+        textposition="auto"))
+    fig.update_layout(height=440, title="Swing in the outcome between the driver's "
+                                        "bottom and top quintile",
+                      xaxis_title="Impact", yaxis=dict(autorange="reversed"))
+    st.plotly_chart(fig, width="stretch")
+
+    st.dataframe(tor.round(3).rename(columns={
+        "driver": "Driver", "correlation": "Rank correlation", "swing": "Swing",
+        "abs_swing": "Absolute swing"}), hide_index=True, width="stretch")
+
+    ui.note(
+        f"<b>{tor.iloc[0]['driver']}</b> dominates the uncertainty. Narrowing that one range is "
+        "worth more than reducing every other assumption combined - and unlike contingency, it "
+        "is something the programme can actually act on. Tighten it with a pilot wave, a "
+        "bandwidth test, or a proper bottom-up estimate on a representative sample.")
+
+    st.markdown("### Funding recommendation")
+    c1, c2 = st.columns(2)
+    with c1:
+        v = np.sort(sim["total_programme_cost"])
+        fig = go.Figure(go.Scatter(x=v, y=np.arange(1, len(v) + 1) / len(v) * 100,
+                                   mode="lines", line=dict(width=3, color=ui.PALETTE[0])))
+        fig.add_vline(x=sc.budget_target, line_dash="dash", line_color=ui.PALETTE[3],
+                      annotation_text="Budget")
+        fig.add_hline(y=80, line_dash="dot", line_color="rgba(128,128,128,.6)",
+                      annotation_text="80% confidence")
+        fig.update_layout(height=400, title="Probability of landing at or below a cost",
+                          xaxis_title=f"Total programme cost ({cur})",
+                          yaxis_title="Confidence (%)")
+        st.plotly_chart(fig, width="stretch")
+    with c2:
+        v = np.sort(sim["elapsed_months"])
+        fig = go.Figure(go.Scatter(x=v, y=np.arange(1, len(v) + 1) / len(v) * 100,
+                                   mode="lines", line=dict(width=3, color=ui.PALETTE[2])))
+        fig.add_vline(x=sc.deadline_months, line_dash="dash", line_color=ui.PALETTE[3],
+                      annotation_text="Deadline")
+        fig.add_hline(y=80, line_dash="dot", line_color="rgba(128,128,128,.6)")
+        fig.update_layout(height=400, title="Probability of finishing within a duration",
+                          xaxis_title="Elapsed months", yaxis_title="Confidence (%)")
+        st.plotly_chart(fig, width="stretch")
+
+    st.dataframe(pd.DataFrame([
+        {"Confidence": f"P{q}",
+         "Programme cost": ui.money(np.percentile(sim["total_programme_cost"], q), cur),
+         "Duration (months)": f"{np.percentile(sim['elapsed_months'], q):.1f}",
+         "Contingency over P50":
+             f"{(np.percentile(sim['total_programme_cost'], q) / np.percentile(sim['total_programme_cost'], 50) - 1) * 100:.0f}%"}
+        for q in [50, 70, 80, 90, 95]]), hide_index=True, width="stretch")
+    ui.note(
+        "Fund to P80. P50 is a coin flip that the programme lands on budget, and every "
+        "steering committee that funds the median spends the second half of the programme "
+        "asking for more money.")
+
+    with st.expander("Full percentile table and raw iterations", expanded=False):
+        disp = pct.copy()
+        label = {"elapsed_months": "Elapsed months", "migration_cost": "One-off migration cost",
+                 "total_programme_cost": "Total programme cost",
+                 "azure_monthly_cost": "Azure monthly run rate",
+                 "year1_total": "Year 1 total", "rollbacks": "Failed cutovers"}
+        disp["metric"] = disp["metric"].map(lambda m: label.get(m, m))
+        st.dataframe(disp.round(1), hide_index=True, width="stretch")
+
+        p80 = sim[sim["total_programme_cost"]
+                  >= np.percentile(sim["total_programme_cost"], 79)].head(400).mean(
+                      numeric_only=True)
+        st.plotly_chart(ui.bar(pd.DataFrame([
+            {"Component": "Labour", "Cost": p80["labour_cost"]},
+            {"Component": "Rework from failed cutovers", "Cost": p80["rework_cost"]},
+            {"Component": "Dual-run overlap", "Cost": p80["dual_run_cost"]},
+            {"Component": "On-premises tail during migration", "Cost": p80["onprem_tail_cost"]},
+        ]), "Component", "Cost", "P80 programme cost composition",
+            orientation="h", height=300, text_fmt=",.0f"), width="stretch")
+        ui.df_download(sim, "monte_carlo_iterations.csv", "Download all iterations")
 
 # --------------------------------------------------------------------------
 with tab_sens:

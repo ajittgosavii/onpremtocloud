@@ -235,14 +235,12 @@ PAGES = {
                 icon=":material/hub:"),
         st.Page("views/future_state.py", title="Current & future state",
                 icon=":material/compare_arrows:"),
-        st.Page("views/cost.py", title="Azure cost simulator", icon=":material/payments:"),
         st.Page("views/business_case.py", title="Business case",
                 icon=":material/account_balance:"),
     ],
     "5 - Plan": [
         st.Page("views/plan.py", title="Wave plan & timeline",
                 icon=":material/calendar_month:"),
-        st.Page("views/simulate.py", title="Risk simulation", icon=":material/casino:"),
     ],
     "6 - Execute": [
         st.Page("views/azure_migrate.py", title="Azure Migrate simulator",
