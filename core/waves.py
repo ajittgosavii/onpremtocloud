@@ -324,7 +324,19 @@ def principle_status(schedule, plan, test_migration_pct: float = 0.0) -> list[di
                 + ("" if spread > 1.2 else " -- near-uniform sizing suggests waves "
                                            "were cut by count rather than by risk"))
 
-    if plan:
+    # Derived from the schedule itself rather than from the migration simulator,
+    # so this holds whether or not that page has been opened this session.
+    if schedule is not None and len(schedule) and "binding_constraint" in cols:
+        binding = schedule["binding_constraint"].value_counts()
+        top = binding.index[0]
+        bandwidth_bound = int(binding.get("Bandwidth", 0))
+        checks["disk_sizing"] = (
+            PRINCIPLE_TESTED if bandwidth_bound == 0 else PRINCIPLE_OPEN,
+            f"{top} governs {int(binding.iloc[0])} of {len(schedule)} waves"
+            + ("" if bandwidth_bound == 0
+               else f" -- {bandwidth_bound} waves are bandwidth-bound, which means they "
+                    "were sized against link speed"))
+    elif plan:
         checks["disk_sizing"] = (
             PRINCIPLE_TESTED,
             f"Concurrency modelled at {plan.get('disks_replicating_at_once', 0)} disks "

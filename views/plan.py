@@ -272,9 +272,9 @@ with tab_content:
 # --------------------------------------------------------------------------
 ui.section(
     "Wave design principles",
-    "Seven rules that decide whether a wave can start. Four are testable "
-    "against the plan built above; three are programme conditions no schedule "
-    "can show, and those are the ones that actually stop waves.")
+    "Seven rules that decide whether a wave can start. The ones this plan can "
+    "demonstrate are checked against it; the rest are programme conditions no "
+    "schedule can show, and those are the ones that actually stop waves.")
 
 _mig = st.session_state.get("migrate_summary") or {}
 _principles = waves.principle_status(
@@ -303,6 +303,13 @@ st.dataframe(
     hide_index=True, width="stretch", height=330,
     column_config={"Principle": st.column_config.TextColumn(width="large"),
                    "What this plan shows": st.column_config.TextColumn(width="medium")})
+
+if not st.session_state.get("migrate_appliance_plan"):
+    ui.note(
+        "The test-migration principle cannot be checked until the Azure Migrate simulator "
+        "has run in this session, so it is shown as a programme condition below. Open "
+        "<b>Azure Migrate &amp; tooling</b> and it is checked against the coverage that "
+        "page models.")
 
 ui.note(
     "<b>The rollback plan is the one people assume exists and does not.</b> There is no "

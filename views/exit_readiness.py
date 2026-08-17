@@ -43,11 +43,24 @@ with tab_seg:
 
     counts = sized["strategy"].value_counts().to_dict()
     rows = broadcom.segmentation_scorecard(counts, len(sized))
+    _why = {sg.name: sg.rationale for sg in broadcom.SEGMENTS}
     board = pd.DataFrame([{
         "Segment": r["segment"], "VMs": r["vms"], "Share": f"{r['pct']:.1f}%",
         "Typical band": r["band"], "Position": r["verdict"].title(),
-        "Natural destination": r["destination"]} for r in rows])
-    st.dataframe(board, hide_index=True, width="stretch")
+        "Natural destination": r["destination"],
+        "Why that destination": _why.get(r["segment"], "")} for r in rows])
+    st.dataframe(
+        board, hide_index=True, width="stretch",
+        column_config={"Natural destination": st.column_config.TextColumn(width="medium"),
+                       "Why that destination": st.column_config.TextColumn(width="large")})
+
+    ui.note(
+        "<b>The Relocate row is the one to read aloud.</b> Its destination is AVS as a "
+        "time-boxed bridge <i>or NC2 on Azure</i> -- and NC2 should be evaluated against "
+        "AVS specifically, because it carries no Broadcom requirement and AVS does. A "
+        "relocate segment that defaults to AVS without that comparison having been made "
+        "is the anti-pattern this whole application exists to prevent: spending a "
+        "migration budget to move the licence rather than remove it.")
 
     retire = next((r for r in rows if r["segment"] == "Retire"), None)
     if retire and retire["verdict"] == "below":

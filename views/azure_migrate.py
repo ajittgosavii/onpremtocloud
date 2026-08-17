@@ -85,6 +85,10 @@ with st.expander("Azure Migrate configuration", expanded=True):
 phases, msum = ams.simulate(res.estate, cfg, sized=res.sized)
 plan = msum["appliance_plan"]
 st.session_state["migrate_summary"] = {k: v for k, v in msum.items() if k != "appliance_plan"}
+# Published separately so the wave plan page can check its design principles
+# against what this simulator actually modelled.
+st.session_state["migrate_appliance_plan"] = plan
+st.session_state["migrate_test_pct"] = float(cfg.test_migration_pct)
 
 coverage = ams.coverage_assessment(res.estate)
 fully = float(coverage.iloc[0]["share_pct"]) if len(coverage) else 0.0
