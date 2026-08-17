@@ -36,8 +36,8 @@ with st.expander("Effort model", expanded=True):
                       help="Each cycle beyond the first adds roughly 18% to build effort.")
     tooling = c6.number_input("Third-party tooling cost per VM", 0.0, 2000.0,
                              float(m.tooling_cost_per_vm), 10.0,
-                             help="Zero if the plan uses Azure Migrate only. See the "
-                                  "Migration tooling page for licensed alternatives.")
+                             help="Zero if the plan uses Azure Migrate only. See "
+                                  "Azure Migrate & tooling for licensed alternatives.")
     streams = c7.number_input("Parallel migration streams", 1, 30,
                               int(m.parallel_migration_streams))
     prog = c8.number_input("Programme overhead (FTE)", 0.0, 30.0,

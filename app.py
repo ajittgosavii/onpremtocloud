@@ -243,9 +243,8 @@ PAGES = {
                 icon=":material/calendar_month:"),
     ],
     "6 - Execute": [
-        st.Page("views/azure_migrate.py", title="Azure Migrate simulator",
+        st.Page("views/azure_migrate.py", title="Azure Migrate & tooling",
                 icon=":material/cloud_sync:"),
-        st.Page("views/tooling.py", title="Migration tooling", icon=":material/build:"),
         st.Page("views/exit_readiness.py", title="Exit readiness",
                 icon=":material/checklist:"),
     ],

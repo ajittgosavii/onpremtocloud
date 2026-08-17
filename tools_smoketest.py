@@ -23,7 +23,6 @@ PAGES = [
     "views/provider.py",
     "views/platform_options.py",
     "views/future_state.py",
-    "views/tooling.py",
     "views/business_case.py",
     "views/advisor.py",
 ]

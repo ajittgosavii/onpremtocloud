@@ -216,7 +216,7 @@ with col2:
         signals.append(
             f"**{db} VMs carry a database engine.** Azure Migrate assesses SQL Server and "
             "migrates nothing. That is a separate workstream with separate tooling - see the "
-            "Azure Migrate simulator for the size of the gap.")
+            "Azure Migrate & tooling page for the size of the gap.")
     if res.sizing_summary["upsized_count"]:
         signals.append(
             f"**{res.sizing_summary['upsized_count']} VMs get *more* vCPU in Azure than they "

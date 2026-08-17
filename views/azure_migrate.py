@@ -1,5 +1,11 @@
-"""Azure Migrate simulator: how the tool actually behaves against this estate,
-and - just as important - what it cannot do at all."""
+"""Azure Migrate: how the tool actually behaves against this estate, what it
+cannot do at all, and what to supplement it with.
+
+The tooling market used to be a page of its own. The source paper treats the two
+as one topic -- Azure Migrate is the control plane, and the question that follows
+immediately is where to supplement it -- so making the reader assemble that
+argument across two pages was the wrong shape.
+"""
 
 from dataclasses import replace
 
@@ -10,18 +16,20 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from core import azure_migrate_sim as ams
-from core import scenario, ui
+from core import tools_market as tm
+from core import assessment, scenario, ui
 
 sc = scenario.get_scenario()
 res = scenario.current()
 cur = sc.commercial.currency
 
 ui.page_header(
-    "Azure Migrate simulator",
+    "Azure Migrate & tooling",
     "Azure Migrate is the default tool for this migration and it is free, well-supported and "
     "genuinely good at what it does. It is also narrower than most plans assume. This page "
-    "runs its full lifecycle against your estate with the real product limits applied - and "
-    "then sets out, workload by workload, everything it will not do for you.",
+    "runs its full lifecycle against your estate with the real product limits applied, sets "
+    "out workload by workload everything it will not do for you - and then ranks what to "
+    "supplement it with, priced at this estate's scale.",
 )
 
 # --------------------------------------------------------------------------
@@ -109,11 +117,12 @@ ui.takeaway(
     "<b>Database migration</b> tabs quantify the other "
     f"{100 - fully:.0f}%, which is work that has to be done by something else and is almost "
     "always missing from a plan built on the assessment alone. Being the person who raises "
-    "this first is worth a great deal of credibility.")
+    "this first is worth a great deal of credibility - and the last two tabs say what to "
+    "supplement it with, and what that costs.")
 
-tab_life, tab_limits, tab_hetero, tab_db, tab_appl = st.tabs(
+tab_life, tab_limits, tab_hetero, tab_db, tab_appl, tab_supp, tab_market = st.tabs(
     ["Lifecycle", "Limitations", "Heterogeneous workloads", "Database migration",
-     "Appliance & limits"])
+     "Appliance & limits", "Where to supplement it", "The tooling market"])
 
 # ==========================================================================
 with tab_life:
@@ -482,3 +491,158 @@ with tab_appl:
         f"Choosing as-on-premises sizing over performance-based costs a further "
         f"<b>{ui.money(abs(delta), cur)} per month</b>. That is the price of low confidence - "
         "and the reason it is worth waiting for the appliance to finish profiling.")
+
+
+# ==========================================================================
+# Where to supplement it -- the former Migration tooling page.
+#
+# The paper's own framing: Azure Migrate is the control plane, and the next
+# question is what fills the gap the tabs above just quantified. Keeping that
+# on a separate page made the reader join the two arguments themselves.
+# ==========================================================================
+_eol_share = float(res.estate["os_eol"].mean() * 100)
+_blocked_share = float((res.sized["readiness"] == assessment.NOT_READY).mean() * 100)
+_n_vms = len(res.estate)
+
+with tab_supp:
+    ui.section(
+        "What fills the gap",
+        f"Azure Migrate covers {fully:.0f}% of this estate end to end. Real programmes run a "
+        "stack, not a single tool - and the stack below is derived from this client's own "
+        "inventory rather than from a generic vendor list.")
+
+    c1, c2 = st.columns([1, 2])
+    scen = c1.selectbox("What is the driving requirement?", tm.SCENARIOS)
+    custom = c2.toggle("Set my own dimension weights", False)
+
+    weights = None
+    if custom:
+        weights = {}
+        keys = list(tm.DIMENSIONS)
+        for chunk in [keys[i:i + 4] for i in range(0, len(keys), 4)]:
+            cols = st.columns(len(chunk))
+            for col, k in zip(cols, chunk):
+                weights[k] = col.slider(tm.DIMENSIONS[k], 0.0, 3.0, 1.0, 0.1, key=f"tw_{k}")
+
+    ranked = tm.rank_tools(scen, weights)
+
+    fig = go.Figure(go.Bar(
+        x=ranked["fit_score"], y=ranked["tool"], orientation="h",
+        marker_color=[ui.PALETTE[2] if i == 0 else
+                      (ui.PALETTE[0] if i < 4 else ui.PALETTE[7])
+                      for i in range(len(ranked))],
+        text=[f"{v:.0f}" for v in ranked["fit_score"]], textposition="auto"))
+    fig.update_layout(height=560, title=f"Tool fit for: {scen}",
+                      xaxis_title="Weighted fit score (0-100)",
+                      yaxis=dict(autorange="reversed"))
+    st.plotly_chart(fig, width="stretch")
+
+    top = ranked.iloc[0]
+    ui.note(f"<b>Best fit: {top['tool']}</b> ({top['vendor']}) -- {top['best_for']}<br><br>"
+            f"<i>Limits:</i> {top['limits']}")
+
+    st.markdown("### The stack this estate actually needs")
+    st.caption(
+        f"Derived from your inventory: {_n_vms:,} VMs, {_eol_share:.0f}% on an end-of-life "
+        f"guest OS, {_blocked_share:.1f}% blocked from agentless replication, "
+        f"{res.estate_summary['db_vms']} VMs carrying a database engine.")
+
+    stack = tm.recommended_stack(scen, _n_vms, _eol_share, _blocked_share)
+    for i, s in enumerate(stack, 1):
+        with st.container(border=True):
+            c1, c2 = st.columns([1, 3])
+            c1.markdown(f"**{i}. {s['role']}**")
+            c1.markdown("`" + s["tool"] + "`")
+            c2.markdown(s["why"])
+
+    ui.note(
+        "Nobody buys all of these. The point is that a plan naming only Azure Migrate has "
+        "left out dependency mapping, database migration and post-migration optimisation - "
+        "and those gaps show up as schedule, not as a line item.")
+
+    st.markdown("### Cost of the recommended stack")
+    rows = []
+    for s in stack:
+        est = tm.tooling_cost_estimate(_n_vms, s["tool"])
+        rows.append({"Role": s["role"], "Tool": s["tool"],
+                     "Low": est["low"], "High": est["high"],
+                     "Per VM": f"{est['per_vm_low']:.0f}-{est['per_vm_high']:.0f}"
+                     if est["per_vm_high"] else "no incremental cost"})
+    stack_df = pd.DataFrame(rows)
+    total_lo, total_hi = stack_df["Low"].sum(), stack_df["High"].sum()
+    ui.metric_row([
+        ("Stack cost, low", ui.compact_money(total_lo, cur), None),
+        ("Stack cost, high", ui.compact_money(total_hi, cur), None),
+        ("As % of migration cost",
+         f"{total_hi / max(res.effort_summary['migration_cost'], 1) * 100:.0f}%",
+         "at the high end"),
+        ("Per VM", f"{ui.money(total_hi / max(_n_vms, 1), cur)}", "high end"),
+    ])
+    disp = stack_df.copy()
+    disp["Low"] = disp["Low"].map(lambda v: ui.money(v, cur))
+    disp["High"] = disp["High"].map(lambda v: ui.money(v, cur))
+    st.dataframe(disp, hide_index=True, width="stretch")
+
+    if st.button("Apply the high-end tooling cost to the effort model"):
+        scenario.update(effort=replace(sc.effort,
+                                       tooling_cost_per_vm=float(total_hi / max(_n_vms, 1))))
+        st.success("Applied. The Complexity & effort page and every downstream figure now "
+                   "include it.")
+        st.rerun()
+
+# ==========================================================================
+with tab_market:
+    ui.section("Incremental licence cost at this estate's scale",
+               "Order-of-magnitude, based on published list pricing and the discounts commonly "
+               "available at 500+ VMs. Zero means either free or already owned.")
+
+    cost = pd.DataFrame([tm.tooling_cost_estimate(_n_vms, t)
+                         for t in tm.tools_frame()["tool"]]).sort_values("high",
+                                                                        ascending=False)
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=cost["low"], y=cost["tool"], orientation="h",
+                         name="Low estimate", marker_color=ui.PALETTE[2]))
+    fig.add_trace(go.Bar(x=cost["high"] - cost["low"], y=cost["tool"], orientation="h",
+                         name="Range to high estimate", marker_color=ui.PALETTE[1]))
+    fig.update_layout(barmode="stack", height=560,
+                      title=f"Tooling cost for {_n_vms:,} VMs",
+                      xaxis_title=cur, yaxis=dict(autorange="reversed"))
+    ui.legend_top(fig)
+    st.plotly_chart(fig, width="stretch")
+
+    disp = cost.copy()
+    disp["low"] = disp["low"].map(lambda v: ui.money(v, cur))
+    disp["high"] = disp["high"].map(lambda v: ui.money(v, cur))
+    st.dataframe(disp[["tool", "per_vm_low", "per_vm_high", "low", "high"]].rename(columns={
+        "tool": "Tool", "per_vm_low": "Per VM (low)", "per_vm_high": "Per VM (high)",
+        "low": "Estate total (low)", "high": "Estate total (high)"}),
+        hide_index=True, width="stretch")
+
+    ui.note(
+        "Tooling is rarely the deciding cost. A commercial replication product at "
+        f"{ui.compact_money(cost['high'].max(), cur)} looks expensive next to free - but it is "
+        "small against the labour bill, and smaller still against a slipped data centre exit. "
+        "Choose on capability and risk, then negotiate.")
+
+    st.markdown("### Capability scores across the market")
+    heat = tm.rank_tools(tm.SCENARIOS[0]).set_index("tool")[list(tm.DIMENSIONS)]
+    heat.columns = [tm.DIMENSIONS[c] for c in heat.columns]
+    fig = px.imshow(heat, color_continuous_scale=ui.SEQUENTIAL, aspect="auto",
+                    labels=dict(color="Score 1-5"), text_auto=True)
+    fig.update_layout(height=600, xaxis_title="", yaxis_title="",
+                      xaxis=dict(side="top", tickangle=-40))
+    st.plotly_chart(fig, width="stretch")
+
+    st.markdown("### Every tool, in detail")
+    tools = tm.tools_frame()
+    cats = st.multiselect("Category", sorted(tools["category"].unique()))
+    view = tools[tools["category"].isin(cats)] if cats else tools
+    for _, r in view.iterrows():
+        with st.expander(f"{r['tool']}  |  {r['vendor']}  |  {r['category']}"):
+            st.markdown(f"**Licence.** {r['licence']}")
+            st.markdown(f"**Best for.** {r['best_for']}")
+            st.warning(f"**Limits.** {r['limits']}")
+            st.info(f"**Use when:** {r['use_when']}")
+            st.dataframe(pd.DataFrame([{tm.DIMENSIONS[k]: r[k] for k in tm.DIMENSIONS}]),
+                         hide_index=True, width="stretch")

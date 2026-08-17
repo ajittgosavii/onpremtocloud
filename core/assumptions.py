@@ -35,8 +35,7 @@ PAGES = {
     "Target platforms": "views/platform_options.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",
-    "Azure Migrate simulator": "views/azure_migrate.py",
-    "Migration tooling": "views/tooling.py",
+    "Azure Migrate & tooling": "views/azure_migrate.py",
 }
 
 
@@ -212,7 +211,7 @@ def build(sc, res) -> pd.DataFrame:
         Assumption("Effort", "Test cycles per workload", f"{ef.test_cycles}",
                    CALIBRATE, "Complexity & effort", "Effort, at ~18% per extra cycle", 2),
         Assumption("Effort", "Third-party tooling per VM",
-                   _money(ef.tooling_cost_per_vm, cur), CALIBRATE, "Migration tooling",
+                   _money(ef.tooling_cost_per_vm, cur), CALIBRATE, "Azure Migrate & tooling",
                    "Migration cost", 3),
         Assumption("Effort", "Cutover failure probability",
                    "0.8% base, rising with complexity and blockers",
@@ -243,7 +242,7 @@ def build(sc, res) -> pd.DataFrame:
                    "Year-end, quarter-end and peak-trading freezes. Ask early."),
         Assumption("Schedule", "Azure Migrate product limits",
                    "300/500 concurrent, 56 disks in flight", VENDOR,
-                   "Azure Migrate simulator", "Wave size ceilings", 3,
+                   "Azure Migrate & tooling", "Wave size ceilings", 3,
                    "Published by Microsoft. Not adjustable."),
     ]
 

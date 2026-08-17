@@ -63,8 +63,8 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Decide", "Current & future state", "What it looks like before and after"),
     ("Decide", "Business case", "Whether it is worth doing"),
     ("Plan", "Wave plan & timeline", "How long, and what constrains it"),
-    ("Execute", "Azure Migrate simulator", "How the tooling behaves, and its limits"),
-    ("Execute", "Migration tooling", "What else you need to buy"),
+    ("Execute", "Azure Migrate & tooling",
+     "How the tooling behaves, its limits, and what else you need"),
     ("Execute", "Exit readiness", "Whether the programme will survive itself"),
     ("Communicate", "AI advisor", "Turning this into deliverables"),
 ]
@@ -87,8 +87,7 @@ _PAGE_PATHS = {
     "Current & future state": "views/future_state.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",
-    "Azure Migrate simulator": "views/azure_migrate.py",
-    "Migration tooling": "views/tooling.py",
+    "Azure Migrate & tooling": "views/azure_migrate.py",
     "AI advisor": "views/advisor.py",
 }
 
