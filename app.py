@@ -7,7 +7,6 @@ into the seven acts of the client narrative defined in core.ui.NARRATIVE.
 Run with:  streamlit run app.py
 """
 
-import os
 from dataclasses import replace
 
 import streamlit as st
@@ -28,7 +27,7 @@ except Exception:
     pass
 
 from core import azure_catalog as cat                    # noqa: E402
-from core import llm, login_ui, pricing, scenario, ui    # noqa: E402
+from core import login_ui, pricing, scenario, ui         # noqa: E402
 
 # --------------------------------------------------------------------------
 # Gate. Nothing below this runs for a signed-out visitor.
@@ -168,26 +167,6 @@ def sidebar() -> None:
                     "locally for 24 hours.")
 
             st.divider()
-            st.markdown("**AI advisor**")
-            env_key = os.environ.get("OPENAI_API_KEY", "")
-            key = st.text_input(
-                "OpenAI API key", value=st.session_state.get("openai_key", ""),
-                type="password",
-                placeholder="sk-..." if not env_key else "Loaded from environment",
-                help="Optional. Every calculation works without it - the model only writes "
-                     "the narrative, and only from figures computed here.")
-            if key:
-                st.session_state["openai_key"] = key
-            model = st.selectbox(
-                "Model", llm.MODELS,
-                index=llm.MODELS.index(st.session_state.get("openai_model",
-                                                            llm.DEFAULT_MODEL)))
-            st.session_state["openai_model"] = model
-            st.caption("Advisor enabled." if llm.resolve_key(
-                st.session_state.get("openai_key", "")) else
-                "Advisor disabled - no key. Everything else still works.")
-
-            st.divider()
             st.caption(
                 "Figures are simulated from the estate profile you configure and priced "
                 "against live Azure retail rates. A decision aid, not a quotation.")
@@ -229,8 +208,7 @@ PAGES = {
         st.Page("views/assess.py", title="Readiness & 7R", icon=":material/fact_check:"),
         st.Page("views/effort.py", title="Complexity & effort", icon=":material/tune:"),
     ],
-    "4 - Decide": [
-        st.Page("views/provider.py", title="Cloud provider", icon=":material/cloud:"),
+    "4 - Destination": [
         st.Page("views/platform_options.py", title="Target platforms",
                 icon=":material/hub:"),
         st.Page("views/future_state.py", title="Current & future state",
@@ -247,9 +225,6 @@ PAGES = {
                 icon=":material/cloud_sync:"),
         st.Page("views/exit_readiness.py", title="Exit readiness",
                 icon=":material/checklist:"),
-    ],
-    "7 - Communicate": [
-        st.Page("views/advisor.py", title="AI advisor", icon=":material/smart_toy:"),
     ],
 }
 

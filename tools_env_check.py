@@ -5,7 +5,7 @@ Run under each Python you intend to deploy on:  py -3.14 tools_env_check.py
 import sys
 
 MODULES = ["streamlit", "pandas", "numpy", "plotly", "requests", "scipy",
-           "openai", "dotenv", "openpyxl"]
+           "dotenv", "openpyxl"]
 
 
 def main() -> None:

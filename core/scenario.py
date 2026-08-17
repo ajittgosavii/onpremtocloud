@@ -241,34 +241,3 @@ def monte_carlo(res: Result, sc: Scenario) -> pd.DataFrame:
     st.session_state["_mc"] = sim
     st.session_state["_mc_token"] = token
     return sim
-
-
-def llm_state(res: Result, sc: Scenario) -> dict:
-    """Facts handed to the OpenAI advisor. Nothing else reaches the model."""
-    state = {
-        "estate_summary": res.estate_summary,
-        "sizing_summary": res.sizing_summary,
-        "readiness_counts": res.readiness.to_dict("records"),
-        "disposition_counts": res.disposition.to_dict("records"),
-        "cost_summary": res.cost_summary,
-        "effort_summary": res.effort_summary,
-        "schedule_summary": res.schedule_summary,
-        "tco_summary": res.tco_summary,
-        "top_blockers": res.blockers.to_dict("records"),
-        "pricing_source": {
-            "provider": "Azure Retail Prices API",
-            "region": sc.commercial.region,
-            "currency": sc.commercial.currency,
-            "freshness": res.price_book.source,
-            "share_of_vms_priced_from_api_pct": res.cost_summary["priced_from_api_pct"],
-        },
-        "commercial_policy": asdict(sc.commercial),
-        "sizing_policy": asdict(sc.sizing),
-        "onprem_monthly_cost": res.onprem_monthly,
-        "onprem_hosts": res.onprem.hosts,
-    }
-    if "mc_percentiles" in st.session_state:
-        state["mc_percentiles"] = st.session_state["mc_percentiles"]
-    if "migrate_summary" in st.session_state:
-        state["migrate_summary"] = st.session_state["migrate_summary"]
-    return state

@@ -164,7 +164,7 @@ def check_no_import_cycles() -> list[str]:
 def check_requirements_cover_imports() -> list[str]:
     """Every third-party top-level import must appear in requirements.txt."""
     req = pathlib.Path("requirements.txt").read_text(encoding="utf-8").lower()
-    mapping = {"dotenv": "python-dotenv", "openai": "openai", "plotly": "plotly",
+    mapping = {"dotenv": "python-dotenv", "plotly": "plotly",
                "pandas": "pandas", "numpy": "numpy", "requests": "requests",
                "streamlit": "streamlit", "openpyxl": "openpyxl"}
     bad = []

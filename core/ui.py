@@ -58,19 +58,16 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Discover", "Estate discovery", "What you actually have"),
     ("Assess", "Readiness & 7R", "What should happen to each workload"),
     ("Assess", "Complexity & effort", "How hard it is, and why"),
-    ("Decide", "Cloud provider", "Which provider suits this estate"),
-    ("Decide", "Target platforms", "Where it should land"),
-    ("Decide", "Current & future state", "What it looks like before and after"),
-    ("Decide", "Business case", "Whether it is worth doing"),
+    ("Destination", "Target platforms", "Where it should land"),
+    ("Destination", "Current & future state", "What it looks like before and after"),
+    ("Destination", "Business case", "Whether it is worth doing"),
     ("Plan", "Wave plan & timeline", "How long, and what constrains it"),
     ("Execute", "Azure Migrate & tooling",
      "How the tooling behaves, its limits, and what else you need"),
     ("Execute", "Exit readiness", "Whether the programme will survive itself"),
-    ("Communicate", "AI advisor", "Turning this into deliverables"),
 ]
 _STEP_INDEX = {title: i for i, (_, title, _) in enumerate(NARRATIVE)}
-ACTS = ["Start", "Situation", "Discover", "Assess", "Decide", "Plan", "Execute",
-        "Communicate"]
+ACTS = ["Start", "Situation", "Discover", "Assess", "Destination", "Plan", "Execute"]
 
 # Which page each act hands over to, for the "next step" footer.
 _PAGE_PATHS = {
@@ -82,13 +79,11 @@ _PAGE_PATHS = {
     "Estate discovery": "views/inventory.py",
     "Readiness & 7R": "views/assess.py",
     "Complexity & effort": "views/effort.py",
-    "Cloud provider": "views/provider.py",
     "Target platforms": "views/platform_options.py",
     "Current & future state": "views/future_state.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",
     "Azure Migrate & tooling": "views/azure_migrate.py",
-    "AI advisor": "views/advisor.py",
 }
 
 
