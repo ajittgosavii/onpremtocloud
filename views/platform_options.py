@@ -44,8 +44,10 @@ with tab_rank:
         for chunk in [keys[i:i + 4] for i in range(0, len(keys), 4)]:
             cols = st.columns(len(chunk))
             for col, k in zip(cols, chunk):
-                weights[k] = col.slider(platforms.CRITERIA[k], 0.0, 3.0, 1.0, 0.1,
-                                        key=f"pw_{k}")
+                weights[k] = col.slider(
+                    platforms.CRITERIA[k], 0.0, 3.0, 1.0, 0.1, key=f"pw_{k}",
+                    help=f"The source paper bands this criterion as "
+                         f"**{platforms.CRITERION_WEIGHT.get(k, 'not listed')}**.")
 
     ranked = platforms.rank_platforms(priority, weights)
 
@@ -342,3 +344,30 @@ with tab_detail:
             st.info(f"**Best when:** {r['best_when']}")
             scores = pd.DataFrame([{platforms.CRITERIA[k]: r[k] for k in platforms.CRITERIA}])
             st.dataframe(scores, hide_index=True, width="stretch")
+
+# --------------------------------------------------------------------------
+# Evaluated and not shortlisted. Deliberately not scored -- scoring implies
+# candidacy -- but recorded, because the evaluation's completeness is itself
+# the commercial lever the negotiated-renewal scenario is priced on.
+# --------------------------------------------------------------------------
+    ui.section(
+        "Evaluated and not shortlisted",
+        "Recorded so the evaluation can be shown to be comprehensive. None of "
+        "these is a candidate destination here, and none is scored above -- but "
+        "being able to answer \"did you look at OpenStack?\" is worth more at a "
+        "renewal negotiation than the modelling effort it costs.")
+
+    st.dataframe(
+        pd.DataFrame([{"Platform": n, "Position": pos, "Why not a candidate here": why}
+                      for n, pos, why in platforms.EVALUATED_NOT_SHORTLISTED]),
+        hide_index=True, width="stretch",
+        column_config={"Position": st.column_config.TextColumn(width="large"),
+                       "Why not a candidate here":
+                           st.column_config.TextColumn(width="large")})
+
+    ui.note(
+        "A documented alternatives evaluation is the strongest commercial lever available "
+        "at renewal, and its value comes from being complete rather than from being "
+        "favourable. These six are recorded for that reason. Together with the "
+        f"{len(platforms.platforms_frame())} scored options above, the evaluation covers "
+        "every destination in the source assessment.")

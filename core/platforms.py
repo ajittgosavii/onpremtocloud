@@ -21,7 +21,17 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
+# Scoring dimensions. The first five were added to close the gap against the
+# source paper's evaluation criteria, which specifies thirteen -- including
+# "Broadcom dependency removed" as the single Critical criterion, and "exit cost
+# from the new platform", which the paper calls the question rarely asked at
+# selection. See CRITERION_WEIGHT below for the paper's recommended weighting.
 CRITERIA = {
+    "broadcom_exit": "Broadcom dependency removed (5 = eliminated, 1 = retained)",
+    "feature_parity": "Feature parity for the workload (HA, live migration, affinity)",
+    "vendor_risk": "Freedom from vendor and roadmap risk",
+    "exit_cost": "Cheapness of leaving this platform in five years",
+    "hardware_impact": "Freedom from hardware refresh, HCL and SAN stranding",
     "exit_speed": "Speed of data centre exit",
     "migration_effort": "Low migration effort (5 = least work)",
     "run_cost": "Run-cost efficiency",
@@ -39,7 +49,9 @@ _P = [
     dict(
         platform="Azure native IaaS (rehost)", family="Azure public cloud",
         location="Public cloud region",
-        scores=dict(exit_speed=4, migration_effort=4, run_cost=4, modernisation=4,
+        scores=dict(broadcom_exit=5, feature_parity=4, vendor_risk=4,
+                    exit_cost=3, hardware_impact=5,
+                    exit_speed=4, migration_effort=4, run_cost=4, modernisation=4,
                     data_residency=3, latency_control=2, ops_burden=4, lock_in=3,
                     skills_fit=5, resilience=5, compliance=4),
         summary="Lift-and-shift onto Azure Virtual Machines. The default destination and the "
@@ -60,7 +72,9 @@ _P = [
     dict(
         platform="Azure PaaS (replatform / refactor)", family="Azure public cloud",
         location="Public cloud region",
-        scores=dict(exit_speed=2, migration_effort=1, run_cost=5, modernisation=5,
+        scores=dict(broadcom_exit=5, feature_parity=2, vendor_risk=4,
+                    exit_cost=1, hardware_impact=5,
+                    exit_speed=2, migration_effort=1, run_cost=5, modernisation=5,
                     data_residency=3, latency_control=2, ops_burden=5, lock_in=1,
                     skills_fit=4, resilience=5, compliance=4),
         summary="Azure SQL Managed Instance, App Service, AKS and the rest -- retiring the guest "
@@ -79,7 +93,9 @@ _P = [
     dict(
         platform="Azure VMware Solution (AVS)", family="Azure public cloud",
         location="Public cloud region (dedicated hosts)",
-        scores=dict(exit_speed=5, migration_effort=5, run_cost=2, modernisation=2,
+        scores=dict(broadcom_exit=2, feature_parity=5, vendor_risk=2,
+                    exit_cost=2, hardware_impact=5,
+                    exit_speed=5, migration_effort=5, run_cost=2, modernisation=2,
                     data_residency=3, latency_control=2, ops_burden=3, lock_in=2,
                     skills_fit=4, resilience=4, compliance=4),
         summary="Your vSphere environment, running on dedicated Azure hardware. VMs move with "
@@ -100,7 +116,9 @@ _P = [
     dict(
         platform="Azure Local (formerly Azure Stack HCI)", family="On-premises Azure",
         location="Your data centre / edge site",
-        scores=dict(exit_speed=1, migration_effort=3, run_cost=3, modernisation=3,
+        scores=dict(broadcom_exit=5, feature_parity=4, vendor_risk=4,
+                    exit_cost=3, hardware_impact=1,
+                    exit_speed=1, migration_effort=3, run_cost=3, modernisation=3,
                     data_residency=5, latency_control=5, ops_burden=3, lock_in=3,
                     skills_fit=5, resilience=4, compliance=5),
         summary="Azure's own stack running on validated hardware in your data centre, managed "
@@ -126,7 +144,9 @@ _P = [
     dict(
         platform="Azure Stack Hub", family="On-premises Azure",
         location="Your data centre (can be fully disconnected)",
-        scores=dict(exit_speed=1, migration_effort=2, run_cost=2, modernisation=3,
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=3,
+                    exit_cost=2, hardware_impact=1,
+                    exit_speed=1, migration_effort=2, run_cost=2, modernisation=3,
                     data_residency=5, latency_control=5, ops_burden=2, lock_in=2,
                     skills_fit=4, resilience=3, compliance=5),
         summary="A self-contained Azure region you own and operate, including air-gapped "
@@ -145,7 +165,9 @@ _P = [
     dict(
         platform="Azure Arc only (stay put, manage from Azure)", family="On-premises Azure",
         location="Existing VMware estate",
-        scores=dict(exit_speed=1, migration_effort=5, run_cost=1, modernisation=2,
+        scores=dict(broadcom_exit=1, feature_parity=5, vendor_risk=5,
+                    exit_cost=5, hardware_impact=5,
+                    exit_speed=1, migration_effort=5, run_cost=1, modernisation=2,
                     data_residency=5, latency_control=5, ops_burden=2, lock_in=5,
                     skills_fit=5, resilience=3, compliance=5),
         summary="Project the existing vSphere estate into Azure as Arc resources. Azure Policy, "
@@ -167,7 +189,9 @@ _P = [
     dict(
         platform="Nutanix Cloud Clusters (NC2) on Azure", family="Hybrid alternative",
         location="Public cloud region (bare metal) and/or on-premises",
-        scores=dict(exit_speed=4, migration_effort=4, run_cost=2, modernisation=2,
+        scores=dict(broadcom_exit=5, feature_parity=4, vendor_risk=3,
+                    exit_cost=3, hardware_impact=5,
+                    exit_speed=4, migration_effort=4, run_cost=2, modernisation=2,
                     data_residency=4, latency_control=3, ops_burden=3, lock_in=2,
                     skills_fit=3, resilience=4, compliance=4),
         summary="Nutanix AHV running on Azure bare-metal, with the identical stack available "
@@ -186,7 +210,9 @@ _P = [
     dict(
         platform="Nutanix AHV on-premises", family="On-premises hypervisor",
         location="Your data centre",
-        scores=dict(exit_speed=1, migration_effort=3, run_cost=3, modernisation=2,
+        scores=dict(broadcom_exit=5, feature_parity=4, vendor_risk=3,
+                    exit_cost=3, hardware_impact=2,
+                    exit_speed=1, migration_effort=3, run_cost=3, modernisation=2,
                     data_residency=5, latency_control=5, ops_burden=3, lock_in=2,
                     skills_fit=2, resilience=4, compliance=5),
         summary="Replace vSphere with Nutanix on the existing or refreshed hardware. The most "
@@ -205,7 +231,9 @@ _P = [
     dict(
         platform="Microsoft Hyper-V / Windows Server + SCVMM", family="On-premises hypervisor",
         location="Your data centre",
-        scores=dict(exit_speed=1, migration_effort=3, run_cost=4, modernisation=2,
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=4,
+                    exit_cost=4, hardware_impact=4,
+                    exit_speed=1, migration_effort=3, run_cost=4, modernisation=2,
                     data_residency=5, latency_control=5, ops_burden=3, lock_in=4,
                     skills_fit=5, resilience=3, compliance=5),
         summary="Hyper-V on Windows Server Datacenter, which most enterprises already license. "
@@ -224,7 +252,9 @@ _P = [
     dict(
         platform="Red Hat OpenShift Virtualization", family="On-premises hypervisor",
         location="Your data centre or any cloud",
-        scores=dict(exit_speed=2, migration_effort=2, run_cost=3, modernisation=5,
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=4,
+                    exit_cost=4, hardware_impact=3,
+                    exit_speed=2, migration_effort=2, run_cost=3, modernisation=5,
                     data_residency=5, latency_control=4, ops_burden=2, lock_in=4,
                     skills_fit=2, resilience=4, compliance=4),
         summary="Run VMs and containers on one KubeVirt-based platform, so the same infrastructure "
@@ -242,7 +272,9 @@ _P = [
     dict(
         platform="Proxmox VE", family="On-premises hypervisor",
         location="Your data centre",
-        scores=dict(exit_speed=1, migration_effort=3, run_cost=5, modernisation=2,
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=4,
+                    exit_cost=5, hardware_impact=5,
+                    exit_speed=1, migration_effort=3, run_cost=5, modernisation=2,
                     data_residency=5, latency_control=5, ops_burden=2, lock_in=5,
                     skills_fit=1, resilience=3, compliance=3),
         summary="Open-source KVM-based virtualisation with optional paid support. The cheapest "
@@ -260,7 +292,9 @@ _P = [
     dict(
         platform="Google Cloud VMware Engine (GCVE)", family="Other public cloud",
         location="Google Cloud region",
-        scores=dict(exit_speed=5, migration_effort=5, run_cost=2, modernisation=3,
+        scores=dict(broadcom_exit=2, feature_parity=5, vendor_risk=2,
+                    exit_cost=2, hardware_impact=5,
+                    exit_speed=5, migration_effort=5, run_cost=2, modernisation=3,
                     data_residency=3, latency_control=2, ops_burden=3, lock_in=2,
                     skills_fit=2, resilience=4, compliance=4),
         summary="The same vSphere-in-cloud pattern as AVS, on Google Cloud. Worth pricing purely "
@@ -278,7 +312,9 @@ _P = [
     dict(
         platform="Oracle Cloud VMware Solution / OCI", family="Other public cloud",
         location="OCI region",
-        scores=dict(exit_speed=4, migration_effort=4, run_cost=4, modernisation=2,
+        scores=dict(broadcom_exit=2, feature_parity=5, vendor_risk=2,
+                    exit_cost=2, hardware_impact=5,
+                    exit_speed=4, migration_effort=4, run_cost=4, modernisation=2,
                     data_residency=4, latency_control=2, ops_burden=3, lock_in=2,
                     skills_fit=2, resilience=3, compliance=4),
         summary="Customer-managed vSphere on OCI, with the sharpest commercial terms of the "
@@ -295,9 +331,90 @@ _P = [
                   "Oracle VMs in this estate is worth pricing separately.",
     ),
     dict(
+        platform="SUSE Virtualization (Harvester) + Rancher", family="Kubernetes-unified",
+        location="Your data centre",
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=3,
+                    exit_cost=5, hardware_impact=4,
+                    exit_speed=1, migration_effort=2, run_cost=4, modernisation=5,
+                    data_residency=5, latency_control=5, ops_burden=2, lock_in=5,
+                    skills_fit=1, resilience=3, compliance=3),
+        summary="Open-source hyperconverged virtualisation built on Kubernetes, KubeVirt and "
+                "Longhorn, managed through Rancher with SUSE commercial support. The lighter "
+                "counterpart to OpenShift Virtualization.",
+        cost_model="Genuinely open-source licensing; SUSE subscription for support. No per-core "
+                   "hypervisor licence at all.",
+        pros=["The Kubernetes-unified trajectory without OpenShift's licensing weight",
+              "Genuinely open-source licence model, so no acquisition repricing risk",
+              "Lighter footprint and a more infrastructure-oriented interface than OpenShift",
+              "Natural fit where the estate is already standardised on SUSE Linux Enterprise"],
+        cons=["Smaller installed base and a narrower third-party ecosystem than OpenShift",
+              "Backup vendor support, monitoring integrations and available expertise are all "
+              "thinner, which raises delivery risk on a regulated estate",
+              "Kubernetes-shaped operating model -- a substantial change for a vSphere team"],
+        best_when="SUSE-aligned estates wanting an open-source-licensed Kubernetes-native "
+                  "platform. Worth including in a formal market scan; not a primary "
+                  "recommendation where regulated-estate ecosystem depth is required.",
+    ),
+    dict(
+        platform="XCP-ng / Vates (Xen Orchestra)", family="On-premises hypervisor",
+        location="Your data centre",
+        scores=dict(broadcom_exit=5, feature_parity=3, vendor_risk=3,
+                    exit_cost=4, hardware_impact=4,
+                    exit_speed=1, migration_effort=3, run_cost=4, modernisation=2,
+                    data_residency=5, latency_control=5, ops_burden=3, lock_in=4,
+                    skills_fit=1, resilience=3, compliance=3),
+        summary="Open-source Xen-based virtualisation with commercial support from Vates, managed "
+                "through Xen Orchestra. More structured than Proxmox and less expensive than "
+                "Nutanix, which is a real niche.",
+        cost_model="Open-source platform with Vates support subscriptions. Commercial pricing is "
+                   "opaque, which itself complicates business-case modelling.",
+        pros=["Xen's microkernel architecture gives strong isolation between hypervisor and "
+              "guests -- a genuine security-architecture argument",
+              "Structurally familiar to former Citrix Hypervisor / XenServer teams",
+              "European-domiciled vendor, which matters for some public-sector and "
+              "sovereignty-sensitive buyers"],
+        cons=["Smaller community than Proxmox",
+              "Opaque commercial pricing complicates the business case",
+              "Noticeably less third-party tool support than VMware, Hyper-V or Nutanix"],
+        best_when="Former XenServer estates, and organisations for whom vendor domicile is a "
+                  "procurement or sovereignty consideration. Record as evaluated-and-not-selected "
+                  "rather than omitted.",
+    ),
+    dict(
+        platform="OpenStack (managed or self-managed)", family="On-premises hypervisor",
+        location="Your data centre",
+        scores=dict(broadcom_exit=5, feature_parity=4, vendor_risk=4,
+                    exit_cost=4, hardware_impact=3,
+                    exit_speed=1, migration_effort=1, run_cost=2, modernisation=4,
+                    data_residency=5, latency_control=5, ops_burden=1, lock_in=4,
+                    skills_fit=1, resilience=3, compliance=4),
+        summary="A full private cloud with multi-tenancy, quotas, self-service provisioning and "
+                "API-driven consumption. The reference answer for organisations that need to "
+                "operate an internal cloud rather than a virtualisation platform.",
+        cost_model="Self-managed at no licence cost, or a supported distribution from Canonical, "
+                   "Red Hat or Mirantis. The dominant cost is standing engineering headcount.",
+        pros=["Genuine self-service, multi-tenancy and chargeback that no hypervisor offers",
+              "Vendor-neutral, foundation-governed, available from several distributors",
+              "The right answer where internal tenants genuinely require API-driven "
+              "infrastructure"],
+        cons=["The highest operational burden of any option assessed -- it needs a standing team "
+              "with deep expertise",
+              "Under-resourced deployments become unsupportable, and self-managed OpenStack has "
+              "a documented history of becoming the most expensive line in the budget once "
+              "staffing is counted honestly",
+              "Time to value is measured in quarters, not weeks",
+              "Selecting it substitutes a larger transformation programme for the one being "
+              "solved"],
+        best_when="Service providers, large research and public-sector estates with a real "
+                  "self-service requirement. Not a hypervisor replacement, and not recommended "
+                  "where the requirement is migration rather than building a cloud.",
+    ),
+    dict(
         platform="Stay on VMware (VCF 9, renegotiated)", family="Do nothing",
         location="Your data centre",
-        scores=dict(exit_speed=1, migration_effort=5, run_cost=1, modernisation=1,
+        scores=dict(broadcom_exit=1, feature_parity=5, vendor_risk=1,
+                    exit_cost=2, hardware_impact=2,
+                    exit_speed=1, migration_effort=5, run_cost=1, modernisation=1,
                     data_residency=5, latency_control=5, ops_burden=3, lock_in=1,
                     skills_fit=5, resilience=4, compliance=5),
         summary="Renew with Broadcom and keep the estate as it is. The honest baseline every "
@@ -316,35 +433,115 @@ _P = [
     ),
 ]
 
+
+# --------------------------------------------------------------------------
+# Evaluated and not shortlisted.
+#
+# These are not scored, because scoring implies candidacy. They are recorded
+# because the source paper's own argument is that a documented, comprehensive
+# alternatives evaluation is the instrument that moves the incumbent's renewal
+# quote -- which is exactly what Scenario B on the business case is priced on.
+# An evaluation that cannot answer "did you look at OpenStack?" is worth less at
+# the negotiating table than one that can.
+# --------------------------------------------------------------------------
+EVALUATED_NOT_SHORTLISTED = [
+    ("Scale Computing HyperCore",
+     "Purpose-built HCI emphasising simplicity and edge deployment. Genuinely strong "
+     "at automated self-healing and low-touch operation.",
+     "Optimised for edge and small-site deployments rather than a consolidated "
+     "enterprise data centre; ecosystem depth is limited at enterprise scale."),
+    ("Verge.io",
+     "Software-defined data centre with native multi-tenancy and nested virtual data "
+     "centres. Interesting architecture and aggressive commercial positioning.",
+     "Small installed base and limited independent operational track record at "
+     "enterprise scale; carries more platform risk than most enterprise risk "
+     "appetites will accept."),
+    ("Oracle Linux Virtualization Manager / OCVS",
+     "KVM-based, oVirt-derived, with no separate hypervisor licence cost for "
+     "Oracle-licensed estates. OCVS provides a VMware-compatible cloud landing zone.",
+     "Attractive only where the estate is Oracle-heavy and Oracle licensing terms "
+     "dominate the decision. Trades a Broadcom dependency for an Oracle one."),
+    ("Bigstack CubeCOS",
+     "Integrated OpenStack-derived cloud platform packaged for enterprise consumption.",
+     "Niche presence and a limited regional support footprint; inherits OpenStack's "
+     "operational complexity."),
+    ("oVirt",
+     "Open-source upstream of the former Red Hat Virtualization, sharing lineage with "
+     "OpenShift Virtualization. Provides HA, live migration and a web console.",
+     "Community-supported with no enterprise support contract, and Red Hat's strategic "
+     "investment is in OpenShift Virtualization, so the forward roadmap is uncertain."),
+    ("AWS Elastic VMware Service",
+     "The managed-VMware pattern on AWS, equivalent to AVS and GCVE.",
+     "Subject to the same Broadcom bring-your-own-licence requirement as AVS, and "
+     "inconsistent with an Azure-first direction."),
+]
+
 _PRIORITY_WEIGHTS = {
     "Exit the data centre on a deadline": dict(
+        broadcom_exit=1.4, feature_parity=1.0, vendor_risk=0.6,
+        exit_cost=0.5, hardware_impact=1.6,
         exit_speed=2.4, migration_effort=1.4, run_cost=1.2, modernisation=0.7,
         data_residency=0.5, latency_control=0.4, ops_burden=1.0, lock_in=0.6,
         skills_fit=1.0, resilience=1.0, compliance=0.8),
     "Cut total cost of ownership": dict(
+        broadcom_exit=1.6, feature_parity=0.8, vendor_risk=0.8,
+        exit_cost=1.0, hardware_impact=1.4,
         exit_speed=0.8, migration_effort=1.0, run_cost=2.6, modernisation=1.0,
         data_residency=0.6, latency_control=0.4, ops_burden=1.4, lock_in=0.8,
         skills_fit=1.0, resilience=0.9, compliance=0.7),
     "Escape Broadcom licensing": dict(
+        broadcom_exit=3.0, feature_parity=1.0, vendor_risk=1.6,
+        exit_cost=1.2, hardware_impact=1.0,
         exit_speed=1.0, migration_effort=1.2, run_cost=2.2, modernisation=0.8,
         data_residency=1.0, latency_control=0.8, ops_burden=1.2, lock_in=1.6,
         skills_fit=1.1, resilience=1.0, compliance=0.9),
     "Data must stay on-premises": dict(
+        broadcom_exit=1.4, feature_parity=1.4, vendor_risk=1.0,
+        exit_cost=0.8, hardware_impact=1.6,
         exit_speed=0.3, migration_effort=1.2, run_cost=1.4, modernisation=0.9,
         data_residency=2.8, latency_control=2.0, ops_burden=1.2, lock_in=1.0,
         skills_fit=1.2, resilience=1.0, compliance=2.2),
     "Modernise the application estate": dict(
+        broadcom_exit=1.2, feature_parity=0.8, vendor_risk=1.0,
+        exit_cost=1.0, hardware_impact=0.8,
         exit_speed=0.8, migration_effort=0.7, run_cost=1.4, modernisation=2.6,
         data_residency=0.6, latency_control=0.5, ops_burden=1.6, lock_in=0.7,
         skills_fit=1.0, resilience=1.2, compliance=0.8),
     "Minimise risk and disruption": dict(
+        broadcom_exit=0.8, feature_parity=2.2, vendor_risk=1.4,
+        exit_cost=0.8, hardware_impact=1.0,
         exit_speed=0.9, migration_effort=2.4, run_cost=1.0, modernisation=0.5,
         data_residency=1.0, latency_control=0.9, ops_burden=1.2, lock_in=0.8,
         skills_fit=1.8, resilience=1.6, compliance=1.2),
     "Regulated / sovereign workload": dict(
+        broadcom_exit=1.0, feature_parity=1.6, vendor_risk=1.4,
+        exit_cost=0.8, hardware_impact=1.0,
         exit_speed=0.5, migration_effort=1.0, run_cost=1.0, modernisation=0.7,
         data_residency=2.6, latency_control=1.4, ops_burden=1.0, lock_in=1.0,
         skills_fit=1.0, resilience=1.4, compliance=2.8),
+    # The source paper's own recommended weighting (its section 3.1): one
+    # Critical criterion, six High, six Medium. Offered as a priority so the
+    # scorecard can be run the way the paper says to run it, rather than only
+    # against a client-stated driver.
+    "The paper's recommended weighting": dict(
+        broadcom_exit=3.0,
+        migration_effort=2.0, ops_burden=2.0, feature_parity=2.0, resilience=2.0,
+        compliance=2.0, run_cost=2.0,
+        skills_fit=1.0, vendor_risk=1.0, modernisation=1.0, exit_cost=1.0,
+        hardware_impact=1.0, exit_speed=1.0,
+        data_residency=1.0, latency_control=1.0, lock_in=1.0),
+}
+
+# What band the source paper puts each criterion in, for display beside the
+# scorecard. Criteria the paper does not list are marked "-- (not in the paper)".
+CRITERION_WEIGHT = {
+    "broadcom_exit": "Critical",
+    "migration_effort": "High", "ops_burden": "High", "feature_parity": "High",
+    "resilience": "High", "compliance": "High", "run_cost": "High",
+    "skills_fit": "Medium", "vendor_risk": "Medium", "modernisation": "Medium",
+    "exit_cost": "Medium", "hardware_impact": "Medium", "exit_speed": "Medium",
+    "data_residency": "Added here", "latency_control": "Added here",
+    "lock_in": "Added here",
 }
 
 PRIORITIES = list(_PRIORITY_WEIGHTS)
