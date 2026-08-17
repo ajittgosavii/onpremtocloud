@@ -30,8 +30,9 @@ st.markdown(ui.estate_badge(sc.estate_source, sc.estate_label,
                             res.estate_summary["vm_count"]),
             unsafe_allow_html=True)
 
-tab_seg, tab_risk, tab_shape = st.tabs(
-    ["Segmentation & failure modes", "Risk register", "Programme shape"])
+tab_seg, tab_risk, tab_shape, tab_next = st.tabs(
+    ["Segmentation & failure modes", "Risk register", "Programme shape",
+     "Checkpoints & next steps"])
 
 # ==========================================================================
 with tab_seg:
@@ -216,3 +217,51 @@ with tab_shape:
         "1, the landing zone build in Phase 2, and the decommission in Phase 4 that "
         "actually ends the double-run cost. Quote the wave number as the wave number, "
         "not as the programme.")
+
+
+# ==========================================================================
+with tab_next:
+    ui.section(
+        "Decision checkpoints",
+        "The phases say what happens. These say who decides what, on what "
+        "evidence. A checkpoint without named evidence is a meeting rather than "
+        "a gate, and it is the first thing to slip.")
+
+    st.dataframe(
+        pd.DataFrame([{
+            "ID": cid, "Checkpoint": name, "Question to answer": question,
+            "Evidence required": evidence, "Decision owner": owner}
+            for cid, name, question, evidence, owner in broadcom.CHECKPOINTS]),
+        hide_index=True, width="stretch",
+        column_config={"Question to answer": st.column_config.TextColumn(width="medium"),
+                       "Evidence required": st.column_config.TextColumn(width="large")})
+
+    ui.note(
+        "<b>DC3 is the one this application exists to serve.</b> Its evidence is the "
+        "three-scenario business case and the scored matrices re-run against the client's "
+        "own weightings -- both of which are on screen elsewhere here. The others need "
+        "artefacts this model does not hold: an entitlement inventory, a policy compliance "
+        "report, restore-test evidence, core release tracking.")
+
+    ui.section(
+        "The first ninety days",
+        "Sequenced so the negotiation and the discovery run in parallel. The "
+        "observation window is the long pole and it starts before the platform "
+        "decision, not after it.")
+
+    cols = st.columns(len(broadcom.NEXT_STEPS))
+    for col, (horizon, actions) in zip(cols, broadcom.NEXT_STEPS):
+        with col:
+            with st.container(border=True):
+                st.markdown(f"**{horizon}**")
+                for a in actions:
+                    st.markdown(f"- {a}")
+
+    _ms = broadcom.milestone_status(broadcom.MILESTONES[0])
+    ui.takeaway(
+        f"The 30-day column is not a plan, it is a countdown. The nearest modelled "
+        f"deadline is <b>{_ms['label']}</b> away, and the 30-day observation window has to "
+        "start regardless of where the platform decision lands -- discovery data is the "
+        "input to the negotiation and to the migration plan equally. A programme that "
+        "waits for the platform decision before starting discovery has spent its "
+        "negotiating leverage on a decision it could have made later with better data.")

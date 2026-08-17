@@ -510,3 +510,81 @@ def discovery_coverage(columns) -> list[dict]:
                                else "No inventory export carries this")),
         })
     return out
+
+
+# --------------------------------------------------------------------------
+# Decision checkpoints and the first ninety days.
+#
+# The phases above say what happens. These say who has to decide what, on what
+# evidence -- which is the part that slips, because a checkpoint without named
+# evidence is a meeting rather than a gate.
+# --------------------------------------------------------------------------
+CHECKPOINTS = [
+    ("DC1", "Contract position",
+     "What are we actually committed to, and when?",
+     "Entitlement inventory, renewal dates, SKU availability confirmed in writing.",
+     "Procurement / commercial lead"),
+    ("DC2", "Estate disposition",
+     "What fraction of the estate can actually go to Azure IaaS?",
+     "Completed discovery, 30-day performance data, validated dependency map, "
+     "exception log.",
+     "Infrastructure lead"),
+    ("DC3", "Platform selection",
+     "Which destinations for which segments?",
+     "Three-scenario business case, scored matrices re-run against the client's own "
+     "weightings, shortlist head-to-heads.",
+     "Architecture authority"),
+    ("DC4", "Landing zone gate",
+     "Are the controls real and enforced?",
+     "Policy compliance report, pilot wave evidence, demonstrated rollback.",
+     "Infrastructure lead"),
+    ("DC5", "Volume authorisation",
+     "Are we ready to run waves at cadence?",
+     "Published runbook, agreed change windows, resourced DR workstream, "
+     "restore-test evidence.",
+     "Programme director"),
+    ("DC6", "Surrender",
+     "Can the incumbent subscription be reduced or surrendered?",
+     "Core release tracking, cluster decommission evidence, contractual boundary "
+     "confirmed.",
+     "Procurement / commercial lead"),
+]
+
+NEXT_STEPS = [
+    ("Next 30 days", [
+        "Confirm the AVS licensing position against the portable-subscription "
+        "deadline. This is the only genuinely time-critical item.",
+        "Establish the contract baseline: renewal dates, entitled core counts, "
+        "edition mix and any perpetual-key exposure.",
+        "Create the migration project and deploy the discovery appliance. The "
+        "30-day observation window should start now, regardless of where the "
+        "platform decision lands.",
+        "Stand up programme governance and appoint a named decision owner for the "
+        "platform selection.",
+        "Open the parallel renewal conversation, framed around the documented "
+        "alternatives evaluation.",
+    ]),
+    ("Next 60 days", [
+        "Complete estate discovery and produce the initial segmentation with a "
+        "disposition per application.",
+        "Confirm the shortlist: Azure IaaS as primary, with a formal head-to-head of "
+        "AVS against NC2 for the relocate segment, and Azure Local against Hyper-V "
+        "against Nutanix AHV for the on-premises residual.",
+        "Baseline source SAN IOPS headroom and decide agentless against agent-based "
+        "replication per workload class.",
+        "Identify and log every exception -- ESXi-only appliances, hardware-bound "
+        "licensing, unsupported guests, low-latency paths and OT dependencies.",
+        "Produce the three-scenario business case with the surrounding cost lines "
+        "modelled separately from the tool's output.",
+    ]),
+    ("Next 90 days", [
+        "Platform decision taken and ratified by the steering committee.",
+        "Azure landing zone built and hardened, with controls demonstrably enforced.",
+        "Pilot waves executed end to end, including test migration, cutover, "
+        "validation and rollback rehearsal.",
+        "Wave runbook, entry and exit criteria and rollback position published, based "
+        "on what the pilot actually demonstrated.",
+        "Negotiation concluded, with the ramp-down and portability positions either "
+        "secured or formally recorded as declined.",
+    ]),
+]
