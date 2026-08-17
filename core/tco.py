@@ -5,9 +5,17 @@ VMware is a per-core subscription (VMware Cloud Foundation / vSphere Foundation)
 with a 16-core-per-socket minimum, so the licence line moves with core count,
 not VM count -- and it renews. This model makes every on-premises component
 visible and adjustable, then discounts both sides to present value.
+
+Stay-versus-migrate is two scenarios, and two is the wrong number. An
+organisation facing a Broadcom renewal has three real options -- renew as
+quoted, renew having negotiated with documented alternatives in hand, or exit
+over the plan period -- and the middle one is the reason to run the exercise
+even if nothing moves. ``three_scenarios`` builds all three off the same
+year-by-year model, so the business case and the Broadcom exposure page cannot
+report different numbers for the same question.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import numpy as np
 import pandas as pd
@@ -200,6 +208,13 @@ def build_tco(onprem: OnPremProfile, azure: AzureProfile, inp: TcoInputs) -> pd.
             remaining = inp.residual_onprem_pct_after_migration / 100.0
 
         onprem_tail = op_base * esc_op * remaining
+        # The residual Broadcom subscription is paid at the *renewal* price, not
+        # today's price, for as long as the transition runs past the renewal.
+        # Omitting this is the single most common way an exit case flatters
+        # itself: it prices the thing being escaped at the old rate.
+        if year >= 4:
+            onprem_tail += vmware_line * (onprem.vmware_renewal_uplift_pct / 100.0) \
+                * esc_op * remaining
         azure_ramp = min(year / max(migration_years, 0.5), 1.0)
         azure_run = az_base * esc_az * azure_ramp
         if year >= 2:
@@ -267,6 +282,102 @@ def tco_summary(df: pd.DataFrame, inp: TcoInputs) -> dict:
         "year1_delta": float(df.iloc[0]["annual_delta"]),
         "steady_state_delta": float(df.iloc[-1]["annual_delta"]),
         "peak_cash_out": float(df["migrate_total"].max()),
+    }
+
+
+@dataclass
+class NegotiatedRenewal:
+    """Scenario B: what a documented alternatives evaluation is worth.
+
+    The discount and the cap are the two things a renewal negotiation can
+    actually win. ``evaluation_one_off`` is what running the evaluation costs --
+    charged to B rather than hidden, because a scenario that pretends its own
+    preparation is free is not a scenario the client can act on.
+    """
+    licence_discount_pct: float = 25.0
+    renewal_cap_pct: float = 8.0
+    evaluation_one_off: float = 150000.0
+
+
+def negotiated_profile(p: OnPremProfile, neg: NegotiatedRenewal) -> OnPremProfile:
+    """The on-premises profile as it would stand after a successful negotiation."""
+    return replace(
+        p,
+        vmware_cost_per_core_year=p.vmware_cost_per_core_year
+        * (1 - neg.licence_discount_pct / 100.0),
+        vmware_renewal_uplift_pct=min(p.vmware_renewal_uplift_pct, neg.renewal_cap_pct),
+    )
+
+
+SCENARIO_LABELS = {
+    "A": "Renew as quoted",
+    "B": "Renew after negotiation",
+    "C": "Exit over the plan period",
+}
+
+
+def three_scenarios(onprem: OnPremProfile, azure: AzureProfile, inp: TcoInputs,
+                    neg: NegotiatedRenewal) -> pd.DataFrame:
+    """Year-by-year cost of all three options, on one discounting basis.
+
+    A and B are both "stay" lines and differ only in the negotiated position.
+    C is the migrate line, and it carries the residual Broadcom subscription at
+    the renewal price -- so C is compared against A and B on like terms.
+    """
+    a = build_tco(onprem, azure, inp)
+    b = build_tco(negotiated_profile(onprem, neg), azure, inp)
+
+    df = pd.DataFrame({
+        "year": a["year"],
+        "scenario_a": a["stay_on_vmware"],
+        "scenario_b": b["stay_on_vmware"],
+        "scenario_c": a["migrate_total"],
+    })
+    # The evaluation is a year-one cost of B. C needs the same work done, so it
+    # is already inside the programme cost; A is the scenario that skips it.
+    df.loc[df["year"] == 1, "scenario_b"] += neg.evaluation_one_off
+
+    r = inp.discount_rate_pct / 100.0
+    df["discount_factor"] = 1 / (1 + r) ** (df["year"] - 0.5)
+    for k in "abc":
+        df[f"pv_{k}"] = df[f"scenario_{k}"] * df["discount_factor"]
+        df[f"cum_{k}"] = df[f"scenario_{k}"].cumsum()
+    return df
+
+
+def scenario_summary(df: pd.DataFrame, inp: TcoInputs) -> dict:
+    """NPV per scenario, plus the two comparisons worth making out loud."""
+    npv = {k: float(df[f"pv_{k}"].sum()) for k in "abc"}
+    cheapest = min(npv, key=npv.get)
+
+    def _crossover(against: str) -> float | None:
+        """First year cumulative C drops below cumulative `against`."""
+        delta = df[f"cum_{against}"] - df["cum_c"]
+        prev = 0.0
+        for year, d in zip(df["year"], delta):
+            if d > 0:
+                frac = abs(prev) / max(abs(d - prev), 1e-9)
+                return float(year - 1 + frac)
+            prev = float(d)
+        return None
+
+    return {
+        "horizon_years": inp.horizon_years,
+        "npv": npv,
+        "cheapest": cheapest,
+        "cheapest_label": SCENARIO_LABELS[cheapest.upper()],
+        # Exit measured against the do-nothing quote -- the flattering comparison.
+        "c_vs_a": npv["a"] - npv["c"],
+        "c_vs_a_pct": (npv["a"] - npv["c"]) / npv["a"] * 100 if npv["a"] else 0.0,
+        # Exit measured against a negotiated renewal -- the honest one, because a
+        # client who does nothing else will still negotiate.
+        "c_vs_b": npv["b"] - npv["c"],
+        "c_vs_b_pct": (npv["b"] - npv["c"]) / npv["b"] * 100 if npv["b"] else 0.0,
+        # What the negotiation alone is worth, with no migration at all.
+        "b_vs_a": npv["a"] - npv["b"],
+        "payback_vs_a": _crossover("a"),
+        "payback_vs_b": _crossover("b"),
+        "undiscounted": {k: float(df[f"scenario_{k}"].sum()) for k in "abc"},
     }
 
 

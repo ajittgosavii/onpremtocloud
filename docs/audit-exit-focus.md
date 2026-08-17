@@ -205,6 +205,39 @@ to be repointed at Business case rather than simply deleted.
 Verified after each step with `tools_deploycheck.py` and `tools_smoketest.py`,
 and at the end with `tools_selftest.py engines` and `tools_authtest.py`.
 
-**Still open:** Business case shows stay-vs-migrate, not the paper's Scenario
-A/B/C. Those three scenarios live on the Broadcom page, so the two pages can
-still disagree. That reconciliation is the next piece of work.
+**Closed since:** Business case now leads with the paper's Scenario A/B/C, built
+in `tco.three_scenarios` off the same discounted model, and the Broadcom page
+reads those figures rather than computing its own. See the note below.
+
+---
+
+## Follow-on: A/B/C reconciliation
+
+The two pages disagreed structurally, not cosmetically. Business case ran a
+discounted TCO keyed on `onprem.vmware_renewal_uplift_pct`; the Broadcom page ran
+its own undiscounted arithmetic with a *renewal multiple* slider, its own horizon
+slider and its own discount slider, none of which were connected to the scenario
+state. Two parameterisations of one quantity, so the pages could not help
+drifting.
+
+* `tco.three_scenarios` / `tco.scenario_summary` build all three off `build_tco`,
+  so escalation, hardware refresh, the on-premises run-down and one-offs apply
+  identically to each. A and B are both "stay" lines differing only in the
+  negotiated position; C is the migrate line.
+* `tco.NegotiatedRenewal` (discount, uplift cap, cost of running the evaluation)
+  is a field on `Scenario`, so it is set once and both pages move together. The
+  evaluation cost is charged to B rather than hidden -- C already carries that
+  work inside the programme cost, and A is the scenario that skips it.
+* The Broadcom page's local sliders are gone; it renders `res.scenario_summary`
+  and links to Business case.
+* **The comparison that matters is C against B, not C against A.** A client will
+  negotiate at renewal whether or not anything moves, so measuring the exit
+  against the do-nothing quote flatters it. Both pages now lead with C-vs-B.
+
+One modelling gap surfaced while doing it. `SCENARIO_C_LINES` asserts the
+application models "residual Broadcom subscription for the whole transition, at
+the renewal price, not today's price" -- and it did not: `build_tco` priced the
+on-premises tail without the renewal uplift. Fixed. The default estate moves by
+$3.8k (0.03%) because its migration finishes in 9.7 months, but the term grows
+with transition length, which is precisely when an exit case needs to be honest
+about it.

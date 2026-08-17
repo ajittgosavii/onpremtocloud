@@ -306,6 +306,29 @@ def build(sc, res) -> pd.DataFrame:
                    "The non-Azure licensing penalty", 2),
     ]
 
+    # ---- Scenario B: the negotiated renewal -------------------------------
+    # These three drive the middle scenario, which is the one that decides
+    # whether the exit case is being compared against a straw man.
+    neg = sc.negotiation
+    a += [
+        Assumption("Renewal negotiation", "Discount achievable with documented alternatives",
+                   f"{neg.licence_discount_pct:.0f}%", CALIBRATE, "Business case",
+                   "Scenario B, and therefore the honest exit comparison", 1,
+                   "The single most consequential assumption on the page. Anchor it on the "
+                   "client's own prior discount position, not on a market average."),
+        Assumption("Renewal negotiation", "Renewal uplift cap secured",
+                   f"{neg.renewal_cap_pct:.0f}% against an uncapped "
+                   f"{op.vmware_renewal_uplift_pct:.0f}%", CALIBRATE, "Business case",
+                   "Scenario B beyond the first renewal", 1,
+                   "Applied only if it beats the uncapped uplift. The cap matters more than "
+                   "this cycle's discount, because the exposure is the next quote."),
+        Assumption("Renewal negotiation", "Cost of running the alternatives evaluation",
+                   _money(neg.evaluation_one_off, cur), CALIBRATE, "Business case",
+                   "Charged to Scenario B in year one", 2,
+                   "Scenario C already carries this work inside the programme cost. "
+                   "Scenario A is the one that skips it."),
+    ]
+
     # ---- Risk -------------------------------------------------------------
     a += [
         Assumption("Risk", "Monte Carlo driver ranges",

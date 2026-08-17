@@ -50,6 +50,9 @@ class Scenario:
     azure_profile: tco.AzureProfile = field(default_factory=tco.AzureProfile)
     tco_inputs: tco.TcoInputs = field(default_factory=tco.TcoInputs)
     autocalibrate_onprem: bool = True
+    # Scenario B: the negotiated-renewal position. Lives here rather than on a
+    # page so the business case and the Broadcom page cannot disagree about it.
+    negotiation: tco.NegotiatedRenewal = field(default_factory=tco.NegotiatedRenewal)
     # Simulation
     mc: montecarlo.SimulationInputs = field(default_factory=montecarlo.SimulationInputs)
     budget_target: float = 4_000_000.0
@@ -120,6 +123,8 @@ class Result:
     onprem: tco.OnPremProfile
     tco_table: pd.DataFrame
     tco_summary: dict
+    scenario_table: pd.DataFrame        # the A/B/C comparison
+    scenario_summary: dict
     onprem_monthly: float
     warnings: list
 
@@ -186,6 +191,8 @@ def run_pipeline(sc: Scenario, estate_override: pd.DataFrame | None = None) -> R
                          migration_one_off=effort_summary["migration_cost"])
     tco_table = tco.build_tco(onprem, az_profile, sc.tco_inputs)
     tco_sum = tco.tco_summary(tco_table, sc.tco_inputs)
+    scen_table = tco.three_scenarios(onprem, az_profile, sc.tco_inputs, sc.negotiation)
+    scen_sum = tco.scenario_summary(scen_table, sc.tco_inputs)
 
     return Result(
         estate=estate, estate_summary=est_summary,
@@ -195,6 +202,7 @@ def run_pipeline(sc: Scenario, estate_override: pd.DataFrame | None = None) -> R
         effort_summary=effort_summary, complexity_bands=bands, factor_contribution=factors,
         schedule=schedule, schedule_summary=sched_summary,
         onprem=onprem, tco_table=tco_table, tco_summary=tco_sum,
+        scenario_table=scen_table, scenario_summary=scen_sum,
         onprem_monthly=onprem_monthly, warnings=warnings,
     )
 

@@ -141,27 +141,80 @@ with st.expander("Azure-side and financial assumptions", expanded=False):
         scenario.update(azure_profile=new_az, tco_inputs=new_ti)
         st.rerun()
 
+with st.expander("Scenario B: the negotiated renewal position", expanded=False):
+    st.caption(
+        "Scenario B is the reason to run this exercise even if nothing moves. These three "
+        "numbers are the whole of it - what the negotiation wins, what it locks, and what "
+        "running it costs. They are shared with the Broadcom exposure page, so the two "
+        "cannot report different figures.")
+    neg = sc.negotiation
+    c1, c2, c3 = st.columns(3)
+    neg_disc = c1.slider(
+        "Discount achievable with documented alternatives (%)", 0.0, 60.0,
+        float(neg.licence_discount_pct), 5.0,
+        help="A credible, evidenced alternatives evaluation is the strongest commercial "
+             "lever available at renewal.")
+    neg_cap = c2.slider(
+        "Renewal uplift cap secured (%)", 0.0, 100.0, float(neg.renewal_cap_pct), 1.0,
+        help="The protection that matters most, because the exposure is the next quote "
+             "rather than this one. Applied only if it beats the uncapped uplift.")
+    neg_cost = c3.number_input(
+        "Cost of running the evaluation", 0.0, 2e6, float(neg.evaluation_one_off), 10000.0,
+        help="Charged to Scenario B in year one. A scenario that pretends its own "
+             "preparation is free is not one the client can act on.")
+    new_neg = replace(neg, licence_discount_pct=float(neg_disc),
+                      renewal_cap_pct=float(neg_cap),
+                      evaluation_one_off=float(neg_cost))
+    if new_neg != neg:
+        scenario.update(negotiation=new_neg)
+        st.rerun()
+
 res = scenario.current()
 ts = res.tco_summary
+ss = res.scenario_summary
+npv = ss["npv"]
 
 # --------------------------------------------------------------------------
+# Three scenarios, not two. Stay-versus-migrate is the comparison that gets a
+# business case waved through and then reopened, because the client's real
+# alternative is not "do nothing" - it is "renew, having negotiated".
+# --------------------------------------------------------------------------
 ui.metric_row([
-    (f"{ts['horizon_years']}-year NPV, stay", ui.compact_money(ts["npv_stay"], cur), None),
-    (f"{ts['horizon_years']}-year NPV, migrate", ui.compact_money(ts["npv_migrate"], cur),
-     f"{-ts['npv_saving_pct']:.0f}%"),
-    ("NPV saving", ui.compact_money(ts["npv_saving"], cur),
-     f"{ts['npv_saving_pct']:.1f}% of the do-nothing case"),
-    ("Payback", f"{ts['payback_years']:.1f} years" if ts["payback_years"] else "beyond horizon",
-     None),
-    ("Steady-state annual saving", ui.compact_money(ts["steady_state_delta"], cur), None),
-])
+    (f"A - Renew as quoted ({ss['horizon_years']}yr NPV)",
+     ui.compact_money(npv["a"], cur), "the do-nothing quote"),
+    ("B - Renew after negotiation", ui.compact_money(npv["b"], cur),
+     f"{ui.compact_money(ss['b_vs_a'], cur)} better than A"),
+    ("C - Exit over the plan period", ui.compact_money(npv["c"], cur),
+     f"cheapest of the three" if ss["cheapest"] == "c" else "not the cheapest"),
+    ("Exit saves, vs the quote", ui.compact_money(ss["c_vs_a"], cur),
+     f"{ss['c_vs_a_pct']:.1f}% of A"),
+    ("Exit saves, vs a negotiated renewal", ui.compact_money(ss["c_vs_b"], cur),
+     f"{ss['c_vs_b_pct']:.1f}% of B - the honest test"),
+], tones=["", "", "pos" if ss["cheapest"] == "c" else "warn", "", ""])
 
 ui.takeaway(
-    "The argument this page has to win is not \"Azure is cheaper\" - it is \"doing nothing is "
-    "not free\". The do-nothing line rises: the VMware subscription renews at a higher rate, "
-    "the hardware refresh lands on schedule, and neither is optional. Show the "
-    "<b>Sensitivity</b> tab unprompted; a case that survives having its assumptions attacked "
-    "in front of the client is worth far more than one that is merely presented.")
+    "Present three scenarios, not two. A business case that compares exiting against "
+    "<i>doing nothing</i> is comparing against a straw man - the client will negotiate at "
+    "renewal whether or not a single virtual machine moves, so <b>C against B is the "
+    "comparison that has to hold up</b>. It is the smaller number and it is the one that "
+    "survives the CFO. Showing B at all also answers the challenge that the analysis was "
+    "written to justify a decision already taken.")
+
+if ss["c_vs_b"] <= 0:
+    ui.note(
+        "<b>Against a successfully negotiated renewal, exiting does not pay back inside "
+        f"{ss['horizon_years']} years on these assumptions.</b> That is a finding, not a "
+        "failure of the model - it means the case for exiting rests on the Broadcom "
+        "dependency and the renewal risk beyond the horizon rather than on this horizon's "
+        "arithmetic. Say so plainly, and lengthen the horizon to show where it turns.",
+        "warn")
+elif ss["b_vs_a"] > 0:
+    ui.note(
+        f"<b>The negotiation alone is worth {ui.compact_money(ss['b_vs_a'], cur)}</b> in "
+        f"present value over {ss['horizon_years']} years, net of what running the "
+        "evaluation costs - and it requires a documented alternatives evaluation to be "
+        "credible. That is worth having whether or not anything moves, which is the "
+        "argument for funding this work before the destination is agreed.", "good")
 
 
 # ==========================================================================
@@ -258,13 +311,16 @@ tab_cash, tab_onprem, tab_azure, tab_levers, tab_conf, tab_sens = st.tabs(
 
 # --------------------------------------------------------------------------
 with tab_cash:
-    t = res.tco_table
+    sct = res.scenario_table
+    _SCEN = [("scenario_a", "A - Renew as quoted", ui.PALETTE[3]),
+             ("scenario_b", "B - Renew after negotiation", ui.PALETTE[1]),
+             ("scenario_c", "C - Exit over the plan period", ui.PALETTE[0])]
+
     fig = go.Figure()
-    fig.add_trace(go.Bar(x=t["year"], y=t["stay_on_vmware"], name="Stay on VMware",
-                         marker_color=ui.PALETTE[3], opacity=0.85))
-    fig.add_trace(go.Bar(x=t["year"], y=t["migrate_total"], name="Migrate to Azure",
-                         marker_color=ui.PALETTE[0], opacity=0.85))
-    fig.update_layout(height=380, barmode="group", title="Annual cost by option",
+    for col, name, colour in _SCEN:
+        fig.add_trace(go.Bar(x=sct["year"], y=sct[col], name=name,
+                             marker_color=colour, opacity=0.85))
+    fig.update_layout(height=380, barmode="group", title="Annual cost by scenario",
                       xaxis_title="Year", yaxis_title=f"{cur} per year",
                       xaxis=dict(dtick=1))
     ui.legend_top(fig)
@@ -273,23 +329,55 @@ with tab_cash:
     c1, c2 = st.columns(2)
     with c1:
         fig = go.Figure()
-        fig.add_trace(go.Scatter(x=t["year"], y=t["cum_stay"], name="Stay",
-                                 mode="lines+markers", line=dict(width=3, color=ui.PALETTE[3])))
-        fig.add_trace(go.Scatter(x=t["year"], y=t["cum_migrate"], name="Migrate",
-                                 mode="lines+markers", line=dict(width=3, color=ui.PALETTE[0])))
+        for col, name, colour in _SCEN:
+            fig.add_trace(go.Scatter(
+                x=sct["year"], y=sct[col.replace("scenario", "cum")], name=name,
+                mode="lines+markers", line=dict(width=3, color=colour)))
         fig.update_layout(height=340, title="Cumulative cost",
                           xaxis_title="Year", yaxis_title=cur, xaxis=dict(dtick=1))
         ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
     with c2:
-        fig = go.Figure(go.Bar(
-            x=t["year"], y=t["cum_delta"],
-            marker_color=[ui.PALETTE[2] if v > 0 else ui.PALETTE[3] for v in t["cum_delta"]],
-            text=[ui.compact_money(v, cur) for v in t["cum_delta"]], textposition="auto"))
-        fig.update_layout(height=340, title="Cumulative saving from migrating",
+        gap_a = sct["cum_a"] - sct["cum_c"]
+        gap_b = sct["cum_b"] - sct["cum_c"]
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=sct["year"], y=gap_a, name="C vs A (the quote)",
+                                 mode="lines+markers",
+                                 line=dict(width=3, color=ui.PALETTE[3], dash="dot")))
+        fig.add_trace(go.Scatter(x=sct["year"], y=gap_b, name="C vs B (negotiated)",
+                                 mode="lines+markers", line=dict(width=3, color=ui.PALETTE[2])))
+        fig.add_hline(y=0, line_dash="dash", line_color="rgba(128,128,128,.6)")
+        fig.update_layout(height=340, title="Cumulative saving from exiting",
                           xaxis_title="Year", yaxis_title=cur, xaxis=dict(dtick=1))
+        ui.legend_top(fig)
         st.plotly_chart(fig, width="stretch")
 
+    scen_disp = sct[["year", "scenario_a", "scenario_b", "scenario_c"]].copy()
+    scen_disp["C vs A"] = sct["cum_a"] - sct["cum_c"]
+    scen_disp["C vs B"] = sct["cum_b"] - sct["cum_c"]
+    for c in ["scenario_a", "scenario_b", "scenario_c", "C vs A", "C vs B"]:
+        scen_disp[c] = scen_disp[c].map(lambda v: ui.money(v, cur))
+    st.dataframe(scen_disp.rename(columns={
+        "year": "Year", "scenario_a": "A - as quoted",
+        "scenario_b": "B - negotiated", "scenario_c": "C - exit",
+        "C vs A": "Cumulative saving vs A", "C vs B": "Cumulative saving vs B"}),
+        hide_index=True, width="stretch")
+
+    ui.note(
+        "<b>Payback against a negotiated renewal is the number to quote.</b> Exiting reaches "
+        + (f"crossover against A in year {ss['payback_vs_a']:.1f}"
+           if ss["payback_vs_a"] else "no crossover against A inside the horizon")
+        + " and against B in "
+        + (f"year {ss['payback_vs_b']:.1f}." if ss["payback_vs_b"]
+           else "no year inside the horizon.")
+        + " The gap between those two dates is what the negotiation buys the client if they "
+          "decide to stay.")
+
+    ui.section("The exit case in detail",
+               "Scenario C broken into its parts: what the on-premises tail still costs "
+               "during the transition, the Azure run rate as it ramps, and the one-offs.")
+
+    t = res.tco_table
     disp = t.copy()
     for c in ["stay_on_vmware", "migrate_onprem_tail", "migrate_azure_run",
               "migrate_one_off", "migrate_total", "annual_delta", "cum_delta"]:

@@ -7,8 +7,6 @@ nothing, and what leverage do we hold" -- and unlike the rest of the model, it
 has dates attached that move whether or not anybody opens the page.
 """
 
-import datetime as dt
-
 import pandas as pd
 import streamlit as st
 
@@ -98,55 +96,55 @@ ui.section("Three scenarios, not two",
            "was written to justify a decision already taken. The middle one is "
            "the reason to run this exercise even if nothing moves.")
 
-with st.expander("Adjust the commercial assumptions", expanded=False):
-    c1, c2, c3 = st.columns(3)
-    multiple = c1.slider(
-        "Renewal multiple on the VMware line", 1.0, 10.0, 3.0, 0.5,
-        help="Renewal quotes commonly land at three to ten times prior "
-             "perpetual-plus-support cost. The multiple depends almost entirely on "
-             "the discount previously held, so anchor it on your own quote.")
-    discount = c2.slider(
-        "Discount achievable with documented alternatives (%)", 0, 60, 25, 5,
-        help="A credible, evidenced alternatives evaluation is the strongest "
-             "commercial lever available at renewal.")
-    horizon = c3.slider("Horizon (years)", 3, 7, 5, 1)
+# These figures are not computed here. They come from the same discounted model
+# that drives Business case, because a client who finds this page and that page
+# disagreeing about the cost of the same three options stops trusting both.
+ss = res.scenario_summary
+npv = ss["npv"]
+horizon = ss["horizon_years"]
 
-quoted = vmware_line * multiple
-negotiated = quoted * (1 - discount / 100.0)
-prog_cost = res.effort_summary["migration_cost"]
-azure_annual = res.cost_summary["monthly_total"] * 12
-elapsed_m = res.schedule_summary.get("elapsed_months", 0) or 12
-
-# Scenario C: residual Broadcom through the transition, then gone.
-transition_years = min(elapsed_m / 12.0, horizon)
-scen = []
-for key, name, desc, sens in broadcom.SCENARIOS:
-    if key == "A":
-        total = quoted * horizon + (onprem_annual - vmware_line) * horizon
-    elif key == "B":
-        total = negotiated * horizon + (onprem_annual - vmware_line) * horizon
-    else:
-        residual = negotiated * transition_years
-        rest_of_platform = (onprem_annual - vmware_line) * transition_years
-        total = residual + rest_of_platform + prog_cost + azure_annual * horizon
-    scen.append({"Scenario": f"{key} -- {name}", "What it is": desc,
-                 f"{horizon}-year total": total, "Dominant sensitivity": sens})
-
-frame = pd.DataFrame(scen)
-best = frame[f"{horizon}-year total"].min()
-frame["vs best"] = frame[f"{horizon}-year total"] - best
+frame = pd.DataFrame([
+    {"Scenario": f"{k} -- {name}", "What it is": desc,
+     f"{horizon}-year NPV": npv[k.lower()],
+     "vs cheapest": npv[k.lower()] - min(npv.values()),
+     "Dominant sensitivity": sens}
+    for k, name, desc, sens in broadcom.SCENARIOS])
 st.dataframe(
-    frame.style.format({f"{horizon}-year total": lambda v: ui.money(v, cur),
-                        "vs best": lambda v: "--" if v == 0 else "+" + ui.money(v, cur)}),
+    frame.style.format({f"{horizon}-year NPV": lambda v: ui.money(v, cur),
+                        "vs cheapest": lambda v: "--" if v == 0 else "+" + ui.money(v, cur)}),
     hide_index=True, width="stretch")
 
-saving_b = (quoted - negotiated) * horizon
+ui.metric_row([
+    ("Cheapest scenario", f"{ss['cheapest'].upper()} -- {ss['cheapest_label']}",
+     f"over {horizon} years, discounted"),
+    ("What negotiating alone is worth", ui.compact_money(ss["b_vs_a"], cur),
+     "B against A, net of the evaluation"),
+    ("What exiting adds beyond that", ui.compact_money(ss["c_vs_b"], cur),
+     "C against B -- the honest comparison"),
+    ("Exit crossover vs a negotiated renewal",
+     f"year {ss['payback_vs_b']:.1f}" if ss["payback_vs_b"] else "beyond horizon",
+     f"year {ss['payback_vs_a']:.1f} against the quote" if ss["payback_vs_a"] else None),
+], tones=["pos" if ss["cheapest"] == "c" else "warn", "", "", ""])
+
+if ss["b_vs_a"] > 0:
+    ui.note(
+        f"<b>The negotiation pays for itself.</b> The modelled discount and renewal cap are "
+        f"worth {ui.compact_money(ss['b_vs_a'], cur)} in present value over {horizon} years "
+        "*after* charging Scenario B with the cost of running the alternatives evaluation. "
+        "That is worth having whether or not a single virtual machine ever moves.", "good")
+else:
+    ui.note(
+        "<b>On the current assumptions the negotiation does not pay for itself</b> - the "
+        "modelled discount and cap are worth less than the evaluation costs to run. Either "
+        "the achievable discount is set too low, or the renewal exposure is small enough "
+        "that the exit case has to rest on concentration risk rather than price.", "warn")
+
 ui.note(
-    f"<b>Scenario B pays for the evaluation on its own.</b> A {discount}% "
-    f"negotiated reduction on a {multiple:.1f}x renewal is worth "
-    f"{ui.compact_money(saving_b, cur)} over {horizon} years, and it requires a "
-    "documented alternatives evaluation to be credible. That is worth having "
-    "whether or not a single virtual machine ever moves.", "good")
+    "The three commercial assumptions behind Scenario B - achievable discount, renewal cap "
+    "and the cost of the evaluation - are set on Business case and shared with this page. "
+    "Change them in one place and both move together.")
+ui.page_link("views/business_case.py", "Open the full three-scenario comparison",
+             ":material/account_balance:")
 
 ui.note(
     "Scenario C is <b>not</b> complete in this model. The lines it is missing are "
