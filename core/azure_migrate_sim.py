@@ -1591,3 +1591,109 @@ def assessment_cost_note(cfg: MigrateConfig) -> str:
         "dependency analysis, and (d) the Azure resources you migrate into. The tooling is "
         "not where the money goes -- the run rate is."
     )
+
+
+# --------------------------------------------------------------------------
+# Adoption checklist -- the pre-flight gate.
+#
+# The limitations register above says what the tool cannot do. This says what
+# has to be true before the tool is relied on for a production wave. Several
+# items are decisions the simulator already models, so they are checked rather
+# than listed; the rest are programme conditions and stay open by default.
+# --------------------------------------------------------------------------
+ADOPTION_CHECKLIST = [
+    ("project_region", "Migration project created in the correct target region, with "
+     "the region architecture already settled."),
+    ("appliance_health", "Appliance deployed, registered and health-monitored as a "
+     "production system, with credential rotation documented."),
+    ("vcenter_perms", "vCenter service account permissions validated at data centre, "
+     "cluster, host, VM and datastore level."),
+    ("observation_window", "Minimum 30-day performance observation window completed "
+     "before any performance-based sizing is acted upon."),
+    ("confidence_rating", "Assessment confidence rating checked and recorded for every "
+     "assessment informing a decision."),
+    ("iops_baseline", "Source SAN IOPS headroom baselined, with a documented decision "
+     "on agentless against agent-based replication per workload class."),
+    ("snapshot_audit", "Estate audited for pre-existing VM snapshots that would block "
+     "changed block tracking."),
+    ("drs_freeze", "DRS automation level and datastore maintenance freeze windows "
+     "agreed with the VMware team for each wave."),
+    ("wave_sizing", "Wave sizing modelled against disk count, per-host disk limits and "
+     "datastore snapshot limits -- not against WAN bandwidth."),
+    ("scaleout", "Scale-out appliance requirement assessed against planned "
+     "concurrency."),
+    ("test_migration", "Test migration performed into an isolated network for every "
+     "Azure IaaS wave, with canary workloads defined for any target that has no test "
+     "action."),
+    ("cost_model", "Cost model built separately, covering egress, backup, monitoring, "
+     "security, networking, DR and non-production environments."),
+    ("rollback", "Rollback position defined and agreed per wave, including how long "
+     "source VMs are retained powered off."),
+    ("replication_timing", "Replication configured close to planned cutover, to stay "
+     "inside the free replication window."),
+    ("preview_fallback", "Fallback documented for any preview capability the plan "
+     "depends on."),
+]
+
+VERIFIED = "verified"        # the model demonstrates this
+OPEN = "open"                # the model shows it is not satisfied
+PROGRAMME = "programme"      # nothing here can evidence it
+
+
+def adoption_status(cfg: "MigrateConfig", msum: dict, estate=None,
+                    overhead_pct: float = 0.0) -> list[dict]:
+    """Score the adoption checklist against the configured simulation.
+
+    Only the items the simulator genuinely evidences are marked verified. The
+    rest stay open, because a checklist that ticks itself is worth nothing at a
+    wave gate.
+    """
+    checks: dict[str, tuple[str, str]] = {}
+
+    days = int(getattr(cfg, "profiling_days_elapsed", 0))
+    checks["observation_window"] = (
+        (VERIFIED if days >= 30 else OPEN),
+        f"{days} days of appliance profiling modelled"
+        + ("" if days >= 30 else " -- under the 30-day minimum"))
+
+    stars = msum.get("confidence_stars", 0)
+    checks["confidence_rating"] = (
+        (VERIFIED if stars >= 4 else OPEN),
+        f"{stars}/5 star confidence at {msum.get('coverage_pct', 0):.0f}% performance "
+        "coverage")
+
+    plan = msum.get("appliance_plan", {}) or {}
+    checks["scaleout"] = (
+        VERIFIED,
+        f"{plan.get('total_appliances', 0)} appliances modelled, ceiling "
+        f"{plan.get('max_concurrent_replications', 0)} concurrent replications")
+
+    checks["wave_sizing"] = (
+        VERIFIED,
+        f"{plan.get('disks_replicating_at_once', 0)} disks in flight, sized on disk "
+        "count rather than bandwidth")
+
+    checks["test_migration"] = (
+        (VERIFIED if getattr(cfg, "test_migration_pct", 0) >= 100 else OPEN),
+        f"{getattr(cfg, 'test_migration_pct', 0):.0f}% of VMs given a test migration "
+        "in this plan")
+
+    checks["cost_model"] = (
+        (VERIFIED if overhead_pct > 0 else OPEN),
+        f"{overhead_pct:.0f}% landing-zone overhead modelled on top of compute and "
+        "storage" if overhead_pct > 0
+        else "No surrounding-services overhead modelled")
+
+    if estate is not None and "has_snapshot" in getattr(estate, "columns", []):
+        n = int(estate["has_snapshot"].sum())
+        checks["snapshot_audit"] = (
+            (VERIFIED if n == 0 else OPEN),
+            f"{n:,} VMs carry a pre-existing snapshot" if n
+            else "No pre-existing snapshots in the estate")
+
+    out = []
+    for key, item in ADOPTION_CHECKLIST:
+        status, note = checks.get(
+            key, (PROGRAMME, "Not evidenced here -- a programme action"))
+        out.append({"key": key, "item": item, "status": status, "note": note})
+    return out

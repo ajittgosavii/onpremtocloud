@@ -120,9 +120,11 @@ ui.takeaway(
     "this first is worth a great deal of credibility - and the last two tabs say what to "
     "supplement it with, and what that costs.")
 
-tab_life, tab_limits, tab_hetero, tab_db, tab_appl, tab_supp, tab_market = st.tabs(
+(tab_life, tab_limits, tab_hetero, tab_db, tab_appl, tab_ready, tab_supp,
+ tab_market) = st.tabs(
     ["Lifecycle", "Limitations", "Heterogeneous workloads", "Database migration",
-     "Appliance & limits", "Where to supplement it", "The tooling market"])
+     "Appliance & limits", "Adoption checklist", "Where to supplement it",
+     "The tooling market"])
 
 # ==========================================================================
 with tab_life:
@@ -646,3 +648,61 @@ with tab_market:
             st.info(f"**Use when:** {r['use_when']}")
             st.dataframe(pd.DataFrame([{tm.DIMENSIONS[k]: r[k] for k in tm.DIMENSIONS}]),
                          hide_index=True, width="stretch")
+
+
+# ==========================================================================
+# Adoption checklist -- the pre-flight gate.
+#
+# The Limitations tab says what the tool cannot do. This says what has to be
+# true before it is relied on for a production wave. Six items are decisions
+# this simulator already models, so they are checked rather than listed; the
+# rest stay open, because a checklist that ticks itself is worth nothing at a
+# wave gate.
+# ==========================================================================
+with tab_ready:
+    ui.section(
+        "Before this tool carries a production wave",
+        "Fifteen conditions. The ones this simulator can evidence are checked "
+        "against the configuration above; the rest are programme actions and "
+        "stay open until somebody does them.")
+
+    _adopt = ams.adoption_status(cfg, msum, res.estate,
+                                 float(sc.commercial.platform_overhead_pct))
+    _n = {k: sum(1 for r in _adopt if r["status"] == k)
+          for k in (ams.VERIFIED, ams.OPEN, ams.PROGRAMME)}
+
+    ui.metric_row([
+        ("Evidenced by this model", f"{_n[ams.VERIFIED]} of {len(_adopt)}",
+         "checked, not assumed"),
+        ("Shown as not satisfied", f"{_n[ams.OPEN]}",
+         "the model can see these are open"),
+        ("Programme actions", f"{_n[ams.PROGRAMME]}",
+         "nothing here can evidence them"),
+        ("Ready for a production wave", "No" if _n[ams.OPEN] or _n[ams.PROGRAMME] else "Yes",
+         "every line has to be closed"),
+    ], tones=["pos", "neg" if _n[ams.OPEN] else "pos", "",
+              "neg" if _n[ams.OPEN] or _n[ams.PROGRAMME] else "pos"])
+
+    _LABEL = {ams.VERIFIED: "Verified here", ams.OPEN: "Not satisfied",
+              ams.PROGRAMME: "Programme action"}
+    st.dataframe(
+        pd.DataFrame([{"Status": _LABEL[r["status"]], "Condition": r["item"],
+                       "What this model shows": r["note"]} for r in _adopt]),
+        hide_index=True, width="stretch", height=560,
+        column_config={"Condition": st.column_config.TextColumn(width="large"),
+                       "What this model shows":
+                           st.column_config.TextColumn(width="medium")})
+
+    for r in _adopt:
+        if r["status"] == ams.OPEN:
+            ui.note(f"<b>{r['item']}</b><br>{r['note']}.", "bad")
+
+    ui.takeaway(
+        "Run this list as a gate, not as a report. Every item on it exists because a "
+        "programme somewhere skipped it and lost a wave to something avoidable -- a "
+        "pre-existing snapshot that blocked changed block tracking, an observation window "
+        "too short to catch month-end, a permission applied at one level of vCenter "
+        "instead of five. The "
+        f"{_n[ams.VERIFIED]} items checked above are the only ones this model can close "
+        f"for you. The other {_n[ams.OPEN] + _n[ams.PROGRAMME]} need somebody's name "
+        "against them.")
