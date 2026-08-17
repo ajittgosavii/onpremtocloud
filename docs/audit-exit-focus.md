@@ -1,12 +1,19 @@
 # Audit: refocusing Ascend purely on VMware exit strategy
 
-**Status:** audit complete, execution not started. Written 2026-08-17.
+**Status:** executed 2026-08-17 in commits fb53778, f7dff23, d9a1ebf. Audit
+written the same day.
+
+> **Correction to the original headline.** This audit was written as "18 pages
+> -> 11". The arithmetic was wrong: 13 pages are kept, 3 merged away and 2 cut,
+> so 18 - 5 = **13**. The resulting-shape diagram below was always right; only
+> the count in the summary was not. Which pages to keep did not change.
 **Objective:** the application should answer one question — *how does an
 organisation leave Broadcom-era VMware, and which destination should each part
 of the estate go to?* Everything that does not serve that question should be
 cut or merged.
 
-The application currently has **18 pages**. This audit proposes **11**.
+The application had **18 pages**. This audit proposed, and the application now
+has, **13**.
 
 ---
 
@@ -98,20 +105,22 @@ statistical page rather than on the wave plan.
 
 ---
 
-## Resulting shape — 11 pages
+## Resulting shape — 13 pages
 
 ```
 0  Start        Start here
 1  Situation    Broadcom exposure  ·  Executive briefing  ·  Model & assumptions
 2  Discover     Estate discovery
 3  Assess       Readiness & 7R  ·  Complexity & effort
-4  Decide       Target platforms  ·  Current & future state  ·  Business case
+4  Destination  Target platforms  ·  Current & future state  ·  Business case
 5  Plan         Wave plan & timeline
 6  Execute      Azure Migrate & tooling  ·  Exit readiness
 ```
 
-The Communicate act disappears with the AI advisor. Consider renaming act 4 to
-**Choose the destination**, which is the language the paper uses.
+The Communicate act disappeared with the AI advisor. Act 4 was renamed, but to
+**Destination** rather than the paper's full phrase "choose the destination":
+`ui.ACTS` renders as chips in the stepper, and one long label beside six short
+ones unbalances the row.
 
 ---
 
@@ -153,3 +162,49 @@ paper's client. If Ascend is meant to be reusable across clients where the
 destination is *not* settled, keep the page but move it behind Start here as an
 optional "the destination is not yet decided" branch, rather than leaving it in
 the main narrative.
+
+---
+
+## What was actually done
+
+Executed in the order above; each commit left the application rendering.
+
+| Commit | Change |
+|---|---|
+| `fb53778` | `cost.py` and `simulate.py` merged into Business case; the "why Azure" salvage panel added |
+| `f7dff23` | `tooling.py` merged into `azure_migrate.py`, renamed **Azure Migrate & tooling** |
+| `d9a1ebf` | `provider.py` and `advisor.py` cut; `openai` removed; act 4 renamed |
+
+Where the merged content landed:
+
+* **Cost simulator** -> Business case, across two tabs rather than one. The
+  commercial levers, lever sensitivity, commitment comparison and the live price
+  feed became the *Cost levers* tab; the monthly run rate, cost-by-dimension and
+  cost concentration went onto *Azure cost base*, beside the annual view they
+  explain.
+* **Risk simulation** -> Business case, *Confidence* tab, flattened from four
+  tabs into sections. Nested tabs were avoided deliberately.
+* **Tooling market** -> Azure Migrate, as *Where to supplement it* (ranking and
+  recommended stack) and *The tooling market* (cost, heat map, full detail).
+
+Two things fell out that the audit did not anticipate:
+
+1. **The Monte Carlo had to be memoised.** Streamlit executes every tab body on
+   every rerun, so once the simulation lived in a tab, 10,000 iterations ran
+   again each time an unrelated slider moved. `scenario.monte_carlo` now caches
+   on `sc.key()`, the same way `scenario.current()` does.
+2. **Cutting the advisor removed more than one page.** `core/llm.py`,
+   `scenario.llm_state`, the sidebar API-key panel, `import os` in `app.py`, and
+   entries in `tools_env_check.py` and `tools_deploycheck.py` went with it.
+
+The sixth registration point the audit flagged as easy to miss -- the page map in
+`core/assumptions.py` -- was the one that needed the most care: ten assumptions
+pointed at the cost simulator and two at the risk simulation, and all of them had
+to be repointed at Business case rather than simply deleted.
+
+Verified after each step with `tools_deploycheck.py` and `tools_smoketest.py`,
+and at the end with `tools_selftest.py engines` and `tools_authtest.py`.
+
+**Still open:** Business case shows stay-vs-migrate, not the paper's Scenario
+A/B/C. Those three scenarios live on the Broadcom page, so the two pages can
+still disagree. That reconciliation is the next piece of work.
