@@ -11,6 +11,8 @@ from streamlit.testing.v1 import AppTest
 
 PAGES = [
     "views/start.py",
+    "views/broadcom.py",
+    "views/exit_readiness.py",
     "views/overview.py",
     "views/assumptions.py",
     "views/inventory.py",
@@ -63,3 +65,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
+

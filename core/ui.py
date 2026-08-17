@@ -52,6 +52,7 @@ BAND_COLOURS = {"Simple": "#2F9E68", "Moderate": "#E08A2E",
 NARRATIVE: list[tuple[str, str, str]] = [
     # (act, page title, one-line purpose used as the eyebrow)
     ("Start", "Start here", "Whose estate are we modelling"),
+    ("Situation", "Broadcom exposure", "What the incumbent costs, and the clock"),
     ("Situation", "Executive briefing", "The answer, up front"),
     ("Situation", "Model & assumptions", "What we are assuming, and where to change it"),
     ("Discover", "Estate discovery", "What you actually have"),
@@ -66,6 +67,7 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Plan", "Risk simulation", "How confident we should be"),
     ("Execute", "Azure Migrate simulator", "How the tooling behaves, and its limits"),
     ("Execute", "Migration tooling", "What else you need to buy"),
+    ("Execute", "Exit readiness", "Whether the programme will survive itself"),
     ("Communicate", "AI advisor", "Turning this into deliverables"),
 ]
 _STEP_INDEX = {title: i for i, (_, title, _) in enumerate(NARRATIVE)}
@@ -75,6 +77,8 @@ ACTS = ["Start", "Situation", "Discover", "Assess", "Decide", "Plan", "Execute",
 # Which page each act hands over to, for the "next step" footer.
 _PAGE_PATHS = {
     "Start here": "views/start.py",
+    "Broadcom exposure": "views/broadcom.py",
+    "Exit readiness": "views/exit_readiness.py",
     "Executive briefing": "views/overview.py",
     "Model & assumptions": "views/assumptions.py",
     "Estate discovery": "views/inventory.py",

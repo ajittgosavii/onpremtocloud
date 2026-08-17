@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import platforms, scenario, tco, ui
+from core import broadcom, platforms, scenario, tco, ui
 
 sc = scenario.get_scenario()
 res = scenario.current()
@@ -63,6 +63,64 @@ with tab_rank:
     top = ranked.iloc[0]
     ui.note(f"<b>Best fit: {top['platform']}</b> -- {top['summary']}<br><br>"
             f"<i>Best when:</i> {top['best_when']}")
+
+    # A fit score says how well a platform suits the estate. It does not say
+    # whether the platform achieves the stated objective, and for anyone leaving
+    # Broadcom that is the only question that decides the shortlist.
+    st.markdown("### Does it actually remove the Broadcom dependency?")
+    verdicts = []
+    for name in ranked["platform"]:
+        dep, arch, fit = broadcom.dependency_for(name)
+        verdicts.append({
+            "Platform": name,
+            "Broadcom dependency": dep,
+            "Archetype": f"{arch} -- {broadcom.ARCHETYPE_BY_KEY[arch].name}",
+            "Strategic fit": fit,
+            "Fit score": float(ranked.loc[ranked["platform"] == name,
+                                          "fit_score"].iloc[0]),
+        })
+    vf = pd.DataFrame(verdicts)
+
+    relocated = vf[vf["Broadcom dependency"] == broadcom.RELOCATED]["Platform"].tolist()
+    retained = vf[vf["Broadcom dependency"] == broadcom.RETAINED]["Platform"].tolist()
+    if relocated:
+        ui.note(
+            "<b>These do not remove the Broadcom relationship, they relocate it: "
+            + ", ".join(relocated) + ".</b> Since the hyperscaler licensing change, "
+            "a managed VMware service requires a portable VCF subscription that you "
+            "buy from Broadcom directly. The node price falls and the subscription "
+            "becomes a line item on your own paper. If the objective is to leave "
+            "Broadcom, these are bridges with a decommission date, not destinations.",
+            "bad")
+    if retained:
+        ui.note("<b>These keep the Broadcom subscription as it is: "
+                + ", ".join(retained) + ".</b> Legitimate as a control case in the "
+                "business case, and as a negotiating position. Not an exit.", "warn")
+
+    st.dataframe(
+        vf.style.format({"Fit score": "{:.0f}"}),
+        hide_index=True, width="stretch")
+    st.caption(
+        "There is a genuine upside in the relocated case: the portable subscription "
+        "is portable. The same entitlement can cover on-premises hosts, managed "
+        "cloud hosts, or a mix, and can shift between them as the estate moves -- "
+        "which turns residual Broadcom spend into a transition instrument rather "
+        "than a sunk cost. It only works if the migration sequencing and the "
+        "renewal term are negotiated together.")
+
+    with st.expander("The five archetypes, and why the choice is really between them",
+                     expanded=False):
+        st.caption(
+            "Fourteen products resolve into five architectural answers. Framing a "
+            "steering committee discussion around the archetype keeps it at the "
+            "right altitude; the product choice inside an archetype is a later and "
+            "much smaller decision.")
+        st.dataframe(pd.DataFrame([{
+            "Archetype": f"{a.key} -- {a.name}",
+            "Broadcom dependency": a.dependency,
+            "Operating model change": a.ops_change,
+            "Best suited to": a.best_for} for a in broadcom.ARCHETYPES]),
+            hide_index=True, width="stretch")
 
     st.markdown("### How they score across every criterion")
     heat = ranked.set_index("platform")[list(platforms.CRITERIA)]

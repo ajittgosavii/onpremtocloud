@@ -214,6 +214,8 @@ PAGES = {
                 icon=":material/play_circle:", default=not _chosen),
     ],
     "1 - Situation": [
+        st.Page("views/broadcom.py", title="Broadcom exposure",
+                icon=":material/gavel:"),
         st.Page("views/overview.py", title="Executive briefing",
                 icon=":material/insights:", default=_chosen),
         st.Page("views/assumptions.py", title="Model & assumptions",
@@ -246,6 +248,8 @@ PAGES = {
         st.Page("views/azure_migrate.py", title="Azure Migrate simulator",
                 icon=":material/cloud_sync:"),
         st.Page("views/tooling.py", title="Migration tooling", icon=":material/build:"),
+        st.Page("views/exit_readiness.py", title="Exit readiness",
+                icon=":material/checklist:"),
     ],
     "7 - Communicate": [
         st.Page("views/advisor.py", title="AI advisor", icon=":material/smart_toy:"),
