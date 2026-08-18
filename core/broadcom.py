@@ -527,16 +527,19 @@ def discovery_coverage(columns, from_documents=()) -> list[dict]:
     for item, source, who, evidence, target in DISCOVERY_CHECKLIST:
         in_estate = bool(evidence) and evidence in cols
         in_doc = bool(target) and target in docs
+        # Kept short deliberately: this renders in a table column, and an
+        # explanation truncated mid-sentence tells the reader less than a
+        # three-word one that fits.
         if in_estate:
             note = f"Present as `{evidence}`"
         elif in_doc:
-            note = "Read from a client document this session"
+            note = "Read from a document"
         elif evidence:
-            note = "Not in the loaded inventory"
+            note = "Not in this inventory"
         elif target:
-            note = "No inventory carries this -- a document can"
+            note = "Needs a document"
         else:
-            note = "No inventory export carries this"
+            note = "No inventory has it"
         out.append({
             "item": item, "source": source, "who": who,
             "held": in_estate or in_doc, "from_document": in_doc,

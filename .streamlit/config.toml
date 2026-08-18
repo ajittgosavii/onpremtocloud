@@ -29,5 +29,10 @@
 [server]
 fileWatcherType = "none"
 
+# The default is 200MB, which the uploader advertises on screen. Nothing here
+# needs anywhere near that: an RVTools export for a very large estate is tens
+# of megabytes, and core/extract.py refuses a document over 20MB regardless.
+maxUploadSize = 50
+
 [browser]
 gatherUsageStats = false

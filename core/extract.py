@@ -44,7 +44,11 @@ MODEL = "claude-opus-5"
 INPUT_PER_MTOK = 5.00
 OUTPUT_PER_MTOK = 25.00
 
-MAX_UPLOAD_BYTES = 24 * 1024 * 1024      # the API caps a request at 32MB
+# The API caps a whole request at 32MB, and a PDF is sent base64-encoded, which
+# inflates it by four thirds. 24MB of PDF is 32MB on the wire before the schema
+# and instruction are added -- over the limit with the arithmetic hidden. 20MB
+# leaves real headroom.
+MAX_UPLOAD_BYTES = 20 * 1024 * 1024
 TEXT_SUFFIXES = {".csv", ".txt", ".md", ".json", ".log", ".tsv"}
 PDF_SUFFIXES = {".pdf"}
 
@@ -408,9 +412,10 @@ def extract(target: Target, filename: str, data: bytes, api_key: str,
         raise ExtractionError("No API key configured.")
     if len(data) > MAX_UPLOAD_BYTES:
         raise ExtractionError(
-            f"{filename} is {len(data) / 1024 / 1024:.1f} MB. The limit here is "
-            f"{MAX_UPLOAD_BYTES // 1024 // 1024} MB -- split it or extract the relevant "
-            "pages.")
+            f"{filename} is {len(data) / 1024 / 1024:.1f} MB. The limit is "
+            f"{MAX_UPLOAD_BYTES // 1024 // 1024} MB, because a PDF is sent base64-encoded "
+            "and that adds a third again against a 32MB request cap. Split it, or export "
+            "just the pages carrying the figures.")
 
     block = _document_block(filename, data)
 

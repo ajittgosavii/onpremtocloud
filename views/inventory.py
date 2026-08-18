@@ -314,11 +314,15 @@ st.dataframe(
                  else ("Yes" if r["held"] else "No")),
         "Data item": r["item"],
         "Source": r["source"],
-        "Who supplies it": r["who"],
+        "Supplied by": r["who"],
         "Evidence here": r["evidence"]} for r in _disc]),
     hide_index=True, width="stretch", height=560,
-    column_config={"Data item": st.column_config.TextColumn(width="large"),
-                   "Evidence here": st.column_config.TextColumn(width="medium")})
+    column_config={
+        "Held": st.column_config.TextColumn(width="small"),
+        "Data item": st.column_config.TextColumn(width="large"),
+        "Source": st.column_config.TextColumn(width="small"),
+        "Supplied by": st.column_config.TextColumn(width="small"),
+        "Evidence here": st.column_config.TextColumn(width="small")})
 
 ui.note(
     f"<b>{len(_prog) - _prog_held} of the {len(_prog)} programme-sourced items are still "
@@ -394,6 +398,10 @@ else:
         key="extract_doc",
         help="PDFs are read in full, including tables and scanned pages. Text formats "
              "are sent verbatim.")
+    st.caption(
+        f"Up to {extract.MAX_UPLOAD_BYTES // 1024 // 1024} MB per document — the uploader "
+        "above quotes the app-wide limit, which is larger. Anything bigger is refused "
+        "before it is sent.")
 
     if _doc is not None:
         _bytes = _doc.getvalue()
