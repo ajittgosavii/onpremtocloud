@@ -1,0 +1,12 @@
+# Binary assets must never have line endings rewritten.
+#
+# Git's autocrlf conversion treats a file as text unless told otherwise. A PDF or
+# an xlsx that has had LF rewritten to CRLF on checkout is a corrupt file -- and
+# the corruption appears only on the machine that checked it out, so it survives
+# review and CI and shows up as "the sample download is broken" for one person.
+*.pdf   binary
+*.xlsx  binary
+*.xls   binary
+*.png   binary
+*.pptx  binary
+*.pem   binary
