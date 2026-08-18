@@ -6,6 +6,7 @@ seed control reads as a toy however good the arithmetic behind it is.
 """
 
 import os
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -402,6 +403,19 @@ else:
         f"Up to {extract.MAX_UPLOAD_BYTES // 1024 // 1024} MB per document — the uploader "
         "above quotes the app-wide limit, which is larger. Anything bigger is refused "
         "before it is sent.")
+
+    # A synthetic quote to test the path with, so nobody has to reach for a
+    # client's own commercial paperwork the first time they try this.
+    _sample = pathlib.Path("data/sample_renewal_quote.pdf")
+    if _target.key == "entitlement" and _sample.exists():
+        st.download_button(
+            "Download a synthetic renewal quote to try it on",
+            _sample.read_bytes(), file_name=_sample.name, mime="application/pdf",
+            help="An invented two-page quotation carrying a renewal date, a core "
+                 "count, two editions at different rates, a refused price cap and a "
+                 "refused ramp-down. Every page is banner-marked as synthetic. Upload "
+                 "it here to check the reader end to end without sending anything of "
+                 "the client's.")
 
     if _doc is not None:
         _bytes = _doc.getvalue()
