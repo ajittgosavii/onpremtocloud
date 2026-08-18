@@ -17,6 +17,7 @@ import streamlit as st
 from core import broadcom, extract, inventory, scenario, ui
 
 sc = scenario.get_scenario()
+cur = sc.commercial.currency
 
 ui.page_header(
     "Estate discovery",

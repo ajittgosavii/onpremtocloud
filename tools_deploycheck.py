@@ -213,8 +213,38 @@ def check_views_only_use_existing_ui() -> list[str]:
     return bad
 
 
+def check_no_undefined_names() -> list[str]:
+    """No name is read before it is bound, anywhere in views/ or core/.
+
+    The smoke test renders every page, but only down the branches a default
+    session reaches. A block behind `if extraction_result:` is never entered, so
+    a missing variable there survives every test and fails in front of whoever
+    finally uses the feature -- which is exactly how `cur` reached production
+    undefined in the Estate discovery apply step.
+
+    pyflakes is a development dependency only, and deliberately not in
+    requirements.txt: it is not imported by the application. Absent, this check
+    reports itself skipped rather than passing quietly, because a check that
+    silently degrades to success is worse than no check.
+    """
+    try:
+        from pyflakes.api import checkPath
+        from pyflakes.reporter import Reporter
+    except ImportError:
+        return ["SKIPPED -- pip install pyflakes to enable this check"]
+
+    import io
+    out, err = io.StringIO(), io.StringIO()
+    reporter = Reporter(out, err)
+    for path in sorted(pathlib.Path("views").glob("*.py")) + \
+            sorted(CORE.glob("*.py")) + [pathlib.Path("app.py")]:
+        checkPath(str(path), reporter)
+    return [line for line in out.getvalue().splitlines() if "undefined name" in line]
+
+
 CHECKS = [
     ("file watcher disabled (the reloader race)", check_file_watcher_disabled),
+    ("no undefined names on unreached branches", check_no_undefined_names),
     ("views only call functions core/ui.py defines", check_views_only_use_existing_ui),
     ("no `from __future__ import annotations`", check_no_future_annotations),
     ("dataclasses survive a module reload", check_dataclasses_survive_reload),
