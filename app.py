@@ -144,7 +144,10 @@ def sidebar() -> None:
                 ])
                 st.markdown(
                     ui.estate_badge(sc.estate_source, sc.estate_label)
-                    + ui.pricing_badge(res.price_book.source), unsafe_allow_html=True)
+                    + ui.pricing_badge(res.price_book.source)
+                    + (f"<span class='pill'>{sc.objective}</span>" if sc.objective
+                       else "<span class='pill'>No objective stated</span>"),
+                    unsafe_allow_html=True)
             except Exception:
                 st.caption("Scenario summary unavailable until the first page loads.")
 
@@ -182,10 +185,13 @@ sidebar()
 # --------------------------------------------------------------------------
 # Navigation, grouped into the seven acts of the client narrative
 # --------------------------------------------------------------------------
-# Until somebody has said where the estate comes from, Start here is the landing
-# page: an executive briefing computed from an estate nobody chose is the most
-# misleading screen this application can show.
-_chosen = bool(scenario.get_scenario().estate_source)
+# Until somebody has said where the estate comes from *and* what the client is
+# trying to achieve, Start here is the landing page. An executive briefing
+# computed from an estate nobody chose is the most misleading screen this
+# application can show; a destination ranking with no stated objective is the
+# second, because it reads as a finding when it is an answer to a question.
+_sc = scenario.get_scenario()
+_chosen = bool(_sc.estate_source) and bool(_sc.objective)
 
 PAGES = {
     "0 - Start": [

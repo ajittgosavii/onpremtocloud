@@ -33,9 +33,27 @@ tab_rank, tab_cost, tab_local, tab_detail = st.tabs(
 
 # --------------------------------------------------------------------------
 with tab_rank:
+    # The objective is scenario state, set on Start here. Changing it here changes
+    # it everywhere, rather than producing a ranking that disagrees with the one
+    # the briefing was written from.
+    _obj = sc.objective if sc.objective in platforms.PRIORITIES else platforms.DEFAULT_PRIORITY
     c1, c2 = st.columns([1, 2])
-    priority = c1.selectbox("What matters most to this client?", platforms.PRIORITIES)
+    priority = c1.selectbox(
+        "What matters most to this client?", platforms.PRIORITIES,
+        index=platforms.PRIORITIES.index(_obj),
+        help="Set on Start here and shared with every page. Changing it here "
+             "changes the stated objective for the whole model.")
+    if priority != sc.objective:
+        scenario.update(objective=priority)
+        st.rerun()
     custom = c2.toggle("Set my own criteria weights", False)
+
+    if not sc.objective:
+        ui.note(
+            "No objective has been stated, so this is ranked on the source assessment's "
+            "own recommended weighting. Pick one above, or on <b>Start here</b>, and the "
+            "ranking becomes an answer to a question rather than a general scorecard.",
+            "warn")
 
     weights = None
     if custom:

@@ -19,6 +19,17 @@ ui.page_header(
     "whole model moves.",
 )
 
+# The briefing is an answer to a stated objective, and saying which one at the
+# top is what stops it being read as the answer to a different question.
+if sc.objective:
+    st.markdown(
+        f"<span class='pill'>Objective: {sc.objective}</span>", unsafe_allow_html=True)
+else:
+    ui.note(
+        "<b>No objective has been stated for this engagement.</b> Everything below still "
+        "computes, but the destination ranking falls back to a general weighting rather "
+        "than this client's. Set it on <b>Start here</b>.", "warn")
+
 for w in res.warnings:
     ui.note(w, "warn")
 

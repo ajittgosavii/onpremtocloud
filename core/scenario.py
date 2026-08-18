@@ -29,6 +29,11 @@ class Scenario:
     # landing page. Otherwise: reference | upload | manual.
     estate_source: str = ""
     estate_label: str = ""
+    # What the client is actually trying to achieve. Set once on Start here and
+    # carried everywhere, because "leave Broadcom" and "leave the data centre"
+    # rank the destination options almost inversely -- and a scorecard presented
+    # without the objective stated is a scorecard that can be read either way.
+    objective: str = ""
 
     # Sizing
     sizing: rightsizing.SizingPolicy = field(default_factory=rightsizing.SizingPolicy)

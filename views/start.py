@@ -16,7 +16,7 @@ import pathlib
 import pandas as pd
 import streamlit as st
 
-from core import inventory, scenario, tco, ui
+from core import inventory, platforms, scenario, tco, ui
 
 sc = scenario.get_scenario()
 
@@ -174,6 +174,77 @@ with r3:
             scenario.update(use_uploaded=False, estate_source="reference",
                             estate_label="547-VM reference estate")
             st.rerun()
+
+# --------------------------------------------------------------------------
+# The second decision, and the one that is usually left implicit.
+#
+# "Leave Broadcom" and "leave the data centre by a date" sound like the same
+# objective in a kickoff and rank the destinations almost inversely -- Azure
+# VMware Solution is third on one and fourteenth on the other. Choosing it here
+# rather than on the comparison page means the ranking can never be read as a
+# neutral finding when it is actually an answer to a question somebody chose.
+# --------------------------------------------------------------------------
+ui.section(
+    "State the objective",
+    "The scorecard is an answer to this question, not a neutral ranking. Say "
+    "which one the client actually holds and every recommendation follows from "
+    "it.")
+
+_preview = []
+for _p in platforms.PRIORITIES:
+    _r = platforms.rank_platforms(_p).reset_index(drop=True)
+    _avs = _r[_r["platform"].str.contains("AVS")]
+    _preview.append({
+        "Objective": _p,
+        "Top destination": _r.iloc[0]["platform"],
+        "Where AVS lands": f"{int(_avs.index[0]) + 1} of {len(_r)}",
+    })
+
+o1, o2 = st.columns([1, 1.35], gap="medium")
+with o1:
+    _idx = (platforms.PRIORITIES.index(sc.objective)
+            if sc.objective in platforms.PRIORITIES else None)
+    _pick = st.radio(
+        "What is this client actually trying to achieve?",
+        platforms.PRIORITIES, index=_idx,
+        key="objective_pick",
+        help="Every one of these is a legitimate programme. They are not the same "
+             "programme, and they do not have the same answer.")
+    if _pick and _pick != sc.objective:
+        scenario.update(objective=_pick)
+        st.rerun()
+
+with o2:
+    st.caption("What each objective does to the recommendation, before you pick. "
+               "The AVS column is the one to look at: it is the fastest exit and "
+               "the one that keeps a Broadcom subscription, so it moves further "
+               "than anything else on the list.")
+    st.dataframe(pd.DataFrame(_preview), hide_index=True, width="stretch",
+                 column_config={"Top destination":
+                                st.column_config.TextColumn(width="medium")})
+
+if sc.objective:
+    _r = platforms.rank_platforms(sc.objective).reset_index(drop=True)
+    _avs = _r[_r["platform"].str.contains("AVS")]
+    _avs_rank = int(_avs.index[0]) + 1
+    ui.note(
+        f"<b>Objective set: {sc.objective}.</b> On this objective the leading destination "
+        f"is <b>{_r.iloc[0]['platform']}</b>, and Azure VMware Solution ranks "
+        f"{_avs_rank} of {len(_r)}. "
+        + ("AVS scores well here because it is the fastest possible exit -- so if it is "
+           "selected, hold it to a named decommission date, because it keeps a Broadcom "
+           "subscription rather than removing one."
+           if _avs_rank <= 5 else
+           "AVS ranks low here because it relocates the Broadcom subscription to you "
+           "rather than eliminating it. That is the correct result for this objective, "
+           "and it is worth saying out loud before somebody proposes AVS as the easy "
+           "answer."),
+        "good" if _avs_rank > 5 else "warn")
+else:
+    ui.note(
+        "<b>No objective stated yet.</b> Until one is, every ranking in the application "
+        "falls back to the source assessment's own recommended weighting -- which is "
+        "defensible, but it is not this client's answer.", "warn")
 
 # --------------------------------------------------------------------------
 # What is measured, and what is still assumed

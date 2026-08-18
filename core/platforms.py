@@ -546,6 +546,10 @@ CRITERION_WEIGHT = {
 
 PRIORITIES = list(_PRIORITY_WEIGHTS)
 
+# Used when no objective has been stated. The paper's own weighting is the only
+# defensible default, because it is the one that does not assume a driver.
+DEFAULT_PRIORITY = "The paper's recommended weighting"
+
 
 def platforms_frame() -> pd.DataFrame:
     rows = []
@@ -557,7 +561,8 @@ def platforms_frame() -> pd.DataFrame:
 
 
 def rank_platforms(priority: str, custom_weights: dict | None = None) -> pd.DataFrame:
-    weights = custom_weights or _PRIORITY_WEIGHTS[priority]
+    weights = custom_weights or _PRIORITY_WEIGHTS.get(
+        priority) or _PRIORITY_WEIGHTS[DEFAULT_PRIORITY]
     df = platforms_frame()
     total_w = sum(weights.get(c, 0) for c in CRITERIA)
     df["fit_score"] = sum(df[c] * weights.get(c, 0) for c in CRITERIA) / (5.0 * total_w) * 100
