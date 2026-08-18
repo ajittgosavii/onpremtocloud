@@ -28,6 +28,38 @@ ui.takeaway(
     "leaves the building, and <b>AVS</b> is both the most expensive over five years "
     "<i>and</i> the only one of the four still buying a Broadcom subscription.")
 
+# Every figure below is derived from the estate, so the estate says where it came
+# from -- the same label every other page carrying estate-derived numbers shows.
+st.markdown(ui.estate_badge(sc.estate_source, sc.estate_label,
+                            res.estate_summary["vm_count"])
+            + ui.pricing_badge(res.price_book.source)
+            + f"<span class='pill'>{sc.commercial.region}</span>"
+            + f"<span class='pill'>{cur}</span>", unsafe_allow_html=True)
+
+for w in res.warnings:
+    ui.note(w, "warn")
+
+if not sc.estate_source:
+    ui.note(
+        "<b>No estate has been chosen, so these four totals are computed from the default "
+        "modelled estate.</b> They are arithmetic, not this client's numbers. Pick an "
+        "estate on <b>Start here</b> -- an RVTools export, your own headline figures, or "
+        "the reference estate -- and every figure on this page recomputes from it.", "warn")
+elif sc.estate_source == "reference":
+    ui.note(
+        "Computed from the <b>547-VM reference estate</b>, which is synthetic. The "
+        "arithmetic and the Azure rates are real; the estate is not. Replace it on "
+        "<b>Start here</b> before presenting any of this as a client's numbers.", "warn")
+
+# The on-premises baseline is the number every saving here is measured against,
+# and unlike the Azure side it has no live feed behind it. Say so once, here.
+if sc.onprem.cost_scale == 1.0:
+    ui.note(
+        "The on-premises baseline is <b>modelled</b>, not measured: an RVTools export "
+        "sizes the estate but cannot say what you pay for DR, staff or SQL. Enter your "
+        "actual annual VMware platform spend on <b>Start here</b>, or edit the individual "
+        "lines on <b>Business case</b>, and the comparison becomes this client's.")
+
 # --------------------------------------------------------------------------
 # Controls. Every default is an assumption, so every default is adjustable.
 # --------------------------------------------------------------------------
