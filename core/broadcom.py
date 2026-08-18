@@ -474,59 +474,73 @@ TOOL_SOURCED = "Discovery tooling"
 PROGRAMME_SOURCED = "Programme-sourced"
 
 # (item, source, who supplies it, the column in an uploaded estate that
-#  evidences it -- or None where nothing in an inventory export can)
+#  evidences it -- or None where nothing in an inventory export can, and the
+#  core.extract target that can read it out of a client document, or None where
+#  no document closes it)
 DISCOVERY_CHECKLIST = [
     ("VM inventory: name, vCPU, memory, disk count and size, NICs, OS version, "
-     "power state", TOOL_SOURCED, "Azure Migrate discovery", "vm_name"),
+     "power state", TOOL_SOURCED, "Azure Migrate discovery", "vm_name", None),
     ("Performance profile: CPU, memory, disk IOPS and throughput, network, over a "
-     "30-day window", TOOL_SOURCED, "Azure Migrate discovery", "cpu_p95_pct"),
+     "30-day window", TOOL_SOURCED, "Azure Migrate discovery", "cpu_p95_pct", None),
     ("Installed software, roles and features per guest", TOOL_SOURCED,
-     "Azure Migrate guest inventory", None),
+     "Azure Migrate guest inventory", None, None),
     ("SQL Server instance and database inventory with compatibility findings",
-     TOOL_SOURCED, "Azure Migrate + Data Migration Assistant", "db_engine"),
+     TOOL_SOURCED, "Azure Migrate + Data Migration Assistant", "db_engine", None),
     ("Network dependency map", TOOL_SOURCED,
-     "Azure Migrate dependency analysis", None),
+     "Azure Migrate dependency analysis", None, None),
     ("Application-to-server mapping and business criticality", PROGRAMME_SOURCED,
-     "CMDB and application owners", "app_name"),
+     "CMDB and application owners", "app_name", None),
     ("Recovery time and recovery point objectives per application",
-     PROGRAMME_SOURCED, "Service owners", None),
+     PROGRAMME_SOURCED, "Service owners", None, 'service_levels'),
     ("Change window availability and blackout periods per application",
-     PROGRAMME_SOURCED, "Service owners", None),
+     PROGRAMME_SOURCED, "Service owners", None, 'service_levels'),
     ("Third-party virtual appliance inventory with vendor support statements",
-     PROGRAMME_SOURCED, "Vendor engagement", None),
+     PROGRAMME_SOURCED, "Vendor engagement", None, 'appliances'),
     ("Hardware-bound licensing: dongles, MAC-bound licences, licence servers",
-     PROGRAMME_SOURCED, "Application owners", "licence_mac_bound"),
+     PROGRAMME_SOURCED, "Application owners", "licence_mac_bound", 'hardware_licensing'),
     ("Existing DR topology, replication pairs and Site Recovery Manager runbook "
-     "logic", PROGRAMME_SOURCED, "Infrastructure team", None),
+     "logic", PROGRAMME_SOURCED, "Infrastructure team", None, 'backup_dr'),
     ("Backup policy, retention, immutability and restore-test evidence",
-     PROGRAMME_SOURCED, "Backup team", None),
+     PROGRAMME_SOURCED, "Backup team", None, 'backup_dr'),
     ("NSX micro-segmentation rule set and distributed switch configuration",
-     PROGRAMME_SOURCED, "Network team", None),
+     PROGRAMME_SOURCED, "Network team", None, None),
     ("IP addressing plan, DNS dependencies and hard-coded address inventory",
-     PROGRAMME_SOURCED, "Network and application teams", None),
+     PROGRAMME_SOURCED, "Network and application teams", None, None),
     ("VMware entitlement position: core counts, editions, renewal dates, "
-     "perpetual-key exposure", PROGRAMME_SOURCED, "Procurement", None),
+     "perpetual-key exposure", PROGRAMME_SOURCED, "Procurement", None, 'entitlement'),
 ]
 
 
-def discovery_coverage(columns) -> list[dict]:
-    """Score the discovery checklist against the columns actually present.
+def discovery_coverage(columns, from_documents=()) -> list[dict]:
+    """Score the discovery checklist against what is actually held.
 
-    ``columns`` is whatever the loaded inventory carries. An item is "held" only
-    where a column evidences it; everything else is outstanding, including every
-    item no inventory export could ever satisfy. That asymmetry is the point --
-    a full-looking estate file still leaves two thirds of this list open.
+    ``columns`` is whatever the loaded inventory carries; ``from_documents`` is
+    the set of ``core.extract`` target keys read from client documents this
+    session. An item is "held" only where one of those two evidences it --
+    everything else is outstanding, including every item no inventory export
+    could ever satisfy. That asymmetry is the point: a full-looking estate file
+    still leaves two thirds of this list open, and closing the rest means going
+    and asking people for documents.
     """
-    cols = set(columns)
+    cols, docs = set(columns), set(from_documents)
     out = []
-    for item, source, who, evidence in DISCOVERY_CHECKLIST:
-        held = bool(evidence) and evidence in cols
+    for item, source, who, evidence, target in DISCOVERY_CHECKLIST:
+        in_estate = bool(evidence) and evidence in cols
+        in_doc = bool(target) and target in docs
+        if in_estate:
+            note = f"Present as `{evidence}`"
+        elif in_doc:
+            note = "Read from a client document this session"
+        elif evidence:
+            note = "Not in the loaded inventory"
+        elif target:
+            note = "No inventory carries this -- a document can"
+        else:
+            note = "No inventory export carries this"
         out.append({
             "item": item, "source": source, "who": who,
-            "held": held,
-            "evidence": (f"Present as `{evidence}`" if held
-                         else ("Not in the loaded inventory" if evidence
-                               else "No inventory export carries this")),
+            "held": in_estate or in_doc, "from_document": in_doc,
+            "target": target, "evidence": note,
         })
     return out
 

@@ -5,13 +5,15 @@ of them produces a number anybody can defend, and a page that opens on a random
 seed control reads as a toy however good the arithmetic behind it is.
 """
 
+import os
+
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from core import broadcom, inventory, scenario, ui
+from core import broadcom, extract, inventory, scenario, ui
 
 sc = scenario.get_scenario()
 
@@ -289,7 +291,8 @@ ui.section(
     "team and procurement, and they are the ones a programme discovers it is "
     "missing at the first wave gate.")
 
-_disc = broadcom.discovery_coverage(res.estate.columns)
+_disc = broadcom.discovery_coverage(
+    res.estate.columns, st.session_state.get("extracted", {}).keys())
 _held = sum(r["held"] for r in _disc)
 _prog = [r for r in _disc if r["source"] == broadcom.PROGRAMME_SOURCED]
 _prog_held = sum(r["held"] for r in _prog)
@@ -307,7 +310,8 @@ ui.metric_row([
 
 st.dataframe(
     pd.DataFrame([{
-        "Held": "Yes" if r["held"] else "No",
+        "Held": ("From a document" if r["from_document"]
+                 else ("Yes" if r["held"] else "No")),
         "Data item": r["item"],
         "Source": r["source"],
         "Who supplies it": r["who"],
@@ -332,3 +336,155 @@ ui.takeaway(
     "be -- and the items are exactly the ones that stop a cutover: an appliance the "
     "vendor will not support, a licence bound to a MAC address, an RTO nobody can meet "
     "on the target.")
+
+
+# --------------------------------------------------------------------------
+# Reading the programme-sourced items out of client documents.
+#
+# This is the only part of the application that sends anything to a third
+# party, and it is off until somebody configures a key. It writes inputs for a
+# human to confirm -- never a score, a ranking or a computed figure.
+# --------------------------------------------------------------------------
+def _secrets_or_none():
+    """st.secrets raises rather than returning empty when there is no file."""
+    try:
+        _ = "anthropic" in st.secrets      # force the read here, not downstream
+        return st.secrets
+    except Exception:
+        return None
+
+
+_secrets = _secrets_or_none()
+_key = extract.key_from(_secrets, os.environ)
+_key_source = extract.key_source(_secrets, os.environ)
+
+ui.section(
+    "Close the programme-sourced items from documents",
+    "The items above that no discovery tool produces do arrive somewhere -- as "
+    "a renewal quote, a vendor support statement, an SRM runbook export. This "
+    "reads one of those into the register.")
+
+if not _key:
+    ui.note(
+        "<b>Document reading is switched off on this deployment.</b> No key is configured, "
+        "so nothing leaves this application except the public Azure and AWS price-list "
+        "lookups. Every figure on every page is computed locally and the model is "
+        "complete without this.<br><br>"
+        "To enable it, put an Anthropic API key in the app's secrets &mdash; "
+        "<code>[anthropic] api_key</code>, <code>[auth] anthropic_key</code>, or "
+        "<code>ANTHROPIC_API_KEY</code> in the environment all work. It then reads a "
+        "document you choose, one at a time, after showing you exactly what would be sent "
+        "&mdash; and it only ever writes values for you to confirm, never a score or a "
+        "recommendation.")
+else:
+    st.caption(
+        f"Reading with **{extract.MODEL}**, key from `{_key_source}`. One document per "
+        "action, sent only when you click, and the payload is shown first. Results are "
+        "yours to confirm — nothing here changes a figure until you apply it.")
+
+    _tgt_name = st.selectbox(
+        "What should it read out of the document?",
+        [t.name for t in extract.TARGETS],
+        help="Each option maps to one or two items on the checklist above.")
+    _target = next(t for t in extract.TARGETS if t.name == _tgt_name)
+    st.caption(f"**Closes:** {_target.checklist_item}  \n**Upload:** {_target.accepts}")
+
+    _doc = st.file_uploader(
+        "Document", type=["pdf", "csv", "txt", "md", "json", "log", "tsv"],
+        key="extract_doc",
+        help="PDFs are read in full, including tables and scanned pages. Text formats "
+             "are sent verbatim.")
+
+    if _doc is not None:
+        _bytes = _doc.getvalue()
+        with st.expander("What would be sent, before anything is sent", expanded=True):
+            st.dataframe(
+                pd.DataFrame([{"": k.replace("_", " ").title(), " ": v}
+                              for k, v in extract.payload_summary(
+                                  _target, _doc.name, _bytes).items()]),
+                hide_index=True, width="stretch")
+            ui.note(
+                "This is a client document. Confirm it against their data-handling "
+                "position before uploading &mdash; redact identity where the facts you "
+                "need do not depend on it.", "warn")
+
+        if st.button(f"Send this document and read the {_target.name.lower()}",
+                     type="primary"):
+            with st.spinner("Reading the document..."):
+                try:
+                    result = extract.extract(_target, _doc.name, _bytes, _key)
+                except extract.ExtractionError as exc:
+                    result = None
+                    st.error(str(exc))
+            if result:
+                st.session_state.setdefault("extracted", {})[_target.key] = result
+                st.rerun()
+
+    # ---- what has been read this session ---------------------------------
+    _done = st.session_state.get("extracted", {})
+    if _done:
+        st.markdown("### Read this session")
+        st.caption(
+            "Machine-read from the documents named. Confirm each value against its source "
+            "before it informs anything — this is a starting point, not evidence.")
+        for key, res in _done.items():
+            tgt = extract.TARGET_BY_KEY[key]
+            conf = res["data"].get("confidence", "unknown")
+            with st.expander(
+                    f"{tgt.name}  |  {res['filename']}  |  {conf} confidence",
+                    expanded=False):
+                st.caption(
+                    f"{res['model']} · {res['input_tokens']:,} in / "
+                    f"{res['output_tokens']:,} out · about "
+                    f"${res['cost_usd']:.2f} at list rates")
+                if res["data"].get("notes"):
+                    ui.note(f"<b>Flagged by the reader:</b> {res['data']['notes']}", "warn")
+                st.json(res["data"])
+                ui.df_download(
+                    pd.json_normalize(res["data"]),
+                    f"extracted_{key}.csv", "Download as CSV")
+
+        # The one place an extracted value may reach the model, and only on a
+        # click, with the current and proposed values both on screen.
+        _ent = _done.get("entitlement", {}).get("data")
+        if _ent and (_ent.get("entitled_cores") or _ent.get("cost_per_core_per_year")):
+            st.markdown("### Apply the entitlement position to the model")
+            cur_cores = (sc.onprem.hosts * sc.onprem.sockets_per_host
+                         * max(sc.onprem.cores_per_socket,
+                               sc.onprem.vmware_min_cores_per_socket))
+            rows = [{"Input": "Licensed cores",
+                     "Currently modelled": f"{cur_cores:,}",
+                     "From the document": f"{_ent['entitled_cores']:,}"
+                                          if _ent.get("entitled_cores") else "not stated"},
+                    {"Input": "Licence cost per core per year",
+                     "Currently modelled":
+                         ui.money(sc.onprem.vmware_cost_per_core_year, cur, 2),
+                     "From the document":
+                         ui.money(_ent["cost_per_core_per_year"], cur, 2)
+                         if _ent.get("cost_per_core_per_year") else "not stated"}]
+            st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+            if st.button("Apply these to the current-state cost base"):
+                from dataclasses import replace as _replace
+                new_op = sc.onprem
+                if _ent.get("cost_per_core_per_year"):
+                    new_op = _replace(
+                        new_op,
+                        vmware_cost_per_core_year=float(_ent["cost_per_core_per_year"]))
+                if _ent.get("entitled_cores"):
+                    per_host = max(new_op.sockets_per_host, 1) * max(
+                        new_op.cores_per_socket, new_op.vmware_min_cores_per_socket)
+                    new_op = _replace(new_op, hosts=max(
+                        1, round(int(_ent["entitled_cores"]) / max(per_host, 1))))
+                scenario.update(onprem=new_op, autocalibrate_onprem=False)
+                st.success(
+                    "Applied. Automatic cluster sizing is now off, because these are the "
+                    "client's own figures and the model should not overwrite them. "
+                    "Check them on Business case before quoting anything.")
+                st.rerun()
+
+        ui.takeaway(
+            "Say where these numbers came from when you present them. A figure read out of "
+            "the client's own renewal quote is worth far more than a modelled default, and "
+            "a figure a machine read and nobody checked is worth considerably less than "
+            "either. The register above names the document for every value, which is the "
+            "part that makes the first claim safe to make.")
