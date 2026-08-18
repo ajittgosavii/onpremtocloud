@@ -16,7 +16,7 @@ import streamlit as st
 # the file watcher disabled, a hosted redeploy re-executes the pages from disk
 # but keeps the already-imported core modules, so new page code can meet an old
 # core.ui until the process restarts.
-API_VERSION = 4
+API_VERSION = 5
 
 # --------------------------------------------------------------------------
 # Palette
@@ -59,6 +59,7 @@ NARRATIVE: list[tuple[str, str, str]] = [
     ("Assess", "Readiness & 7R", "What should happen to each workload"),
     ("Assess", "Complexity & effort", "How hard it is, and why"),
     ("Destination", "Target platforms", "Where it should land"),
+    ("Destination", "Azure-only TCO", "What the Microsoft options cost over five years"),
     ("Destination", "Current & future state", "What it looks like before and after"),
     ("Destination", "Business case", "Whether it is worth doing"),
     ("Plan", "Wave plan & timeline", "How long, and what constrains it"),
@@ -80,6 +81,7 @@ _PAGE_PATHS = {
     "Readiness & 7R": "views/assess.py",
     "Complexity & effort": "views/effort.py",
     "Target platforms": "views/platform_options.py",
+    "Azure-only TCO": "views/azure_only.py",
     "Current & future state": "views/future_state.py",
     "Business case": "views/business_case.py",
     "Wave plan & timeline": "views/plan.py",

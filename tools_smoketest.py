@@ -21,6 +21,7 @@ PAGES = [
     "views/plan.py",
     "views/azure_migrate.py",
     "views/platform_options.py",
+    "views/azure_only.py",
     "views/future_state.py",
     "views/business_case.py",
 ]
